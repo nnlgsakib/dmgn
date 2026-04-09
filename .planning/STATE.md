@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-04-09T03:53:00.000Z"
+last_updated: "2026-04-09T05:01:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
-  percent: 33
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
+  percent: 50
 ---
 
 # State: DMGN
@@ -20,7 +20,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** Phase 03 — networking-core
+**Current focus:** Phase 04 — distributed-storage (next)
 
 ## Phase Progress
 
@@ -28,20 +28,19 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 |-------|--------|-------|
 | 1: Local Foundation | **Complete** | Identity, storage, CLI init/add |
 | 2: Encryption & API | **Complete** | HKDF, crypto framing, REST API, retention, integration tests |
-| 3: Networking Core | Not Started | libp2p, DHT, mDNS |
+| 3: Networking Core | **Complete** | libp2p host, DHT, mDNS, peers CLI, live status |
 | 4: Distributed Storage | Not Started | Sharding, replication |
 | 5: Query & Sync | Not Started | Vector search, gossip |
 | 6: MCP & Polish | Not Started | MCP protocol, docs |
 
 ## Active Work
 
-Phase 2 complete. Ready for Phase 3 (Networking Core).
+Phase 3 complete. Ready for Phase 4 (Distributed Storage).
 
 Completed Plans:
 
-- 02-01 (Wave 1): ✓ HKDF key derivation, crypto framing fix, configurable retention
-- 02-02 (Wave 1): ✓ REST API server with Bearer auth, `dmgn serve` command
-- 02-03 (Wave 2): ✓ CLI query scoring, export/import hardening, integration tests
+- 03-01 (Wave 1): ✓ Core network package (libp2p host, HKDF-derived identity, DHT, mDNS, connection manager, config extensions)
+- 03-02 (Wave 2): ✓ CLI commands (start with networking, peers, status live detection, /peers API endpoint)
 
 ## Decisions Made
 
@@ -52,6 +51,9 @@ Completed Plans:
 5. **Bearer token over HMAC signing**: Simpler auth appropriate for local-first single-user API
 6. **Go stdlib over HTTP framework**: net/http sufficient for 3 endpoints, no Gin/Echo needed
 7. **Phase 1 data break accepted**: HKDF changes key derivation output, dev-only data
+8. **HKDF-derived libp2p key**: Purpose `"libp2p-host"` for domain separation from master identity
+9. **Custom DMGN DHT namespace**: Protocol prefix `/dmgn/kad/1.0.0`, not shared with IPFS
+10. **`dmgn start` includes API**: Single command for full operation, `--no-api` for headless nodes
 
 ## Blockers
 
@@ -59,10 +61,11 @@ None.
 
 ## Recent Changes
 
+- 2026-04-09: Phase 3 complete — 2 plans executed, 36 tests passing (5 network + 3 integration)
 - 2026-04-09: Phase 2 complete — all 3 plans executed, 23+ tests passing
 - 2025-04-09: Phase 2 planned with research — HKDF, crypto fix, REST API, query scoring
 - 2025-04-09: Phase 1 complete - Identity, Storage, Memory model, CLI, Crypto, Config
 - 2025-04-09: Project initialized with PROJECT.md, REQUIREMENTS.md, ROADMAP.md
 
 ---
-*State updated: 2026-04-09 after Phase 2 execution*
+*State updated: 2026-04-09 after Phase 3 execution*

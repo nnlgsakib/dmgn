@@ -10,7 +10,7 @@
 |---|-------|------|------------------|--------------|
 | 1 | [Local Foundation](#phase-1-local-foundation) | Core local storage with identity | CLI, BadgerDB, memory graph | 11 |
 | 2 | [Encryption & API](#phase-2-encryption--api) | End-to-end encryption and interfaces | AES-GCM, REST API, MCP start | 12 |
-| 3 | [Networking Core](#phase-3-networking-core) | libp2p peer discovery and connection | DHT, mDNS, peer management | 5 |
+| 3 | [Networking Core](#phase-3-networking-core) ✓ | libp2p peer discovery and connection | DHT, mDNS, peer management | 5 |
 | 4 | [Distributed Storage](#phase-4-distributed-storage) | Shard and replicate across peers | Sharding, replication factor 3+ | 5 |
 | 5 | [Query & Sync](#phase-5-query--sync) | Cross-peer search and consistency | Vector search, gossip sync | 5 |
 | 6 | [MCP & Polish](#phase-6-mcp--polish) | Full MCP support and production readiness | MCP tools, metrics, docs | 5 |
