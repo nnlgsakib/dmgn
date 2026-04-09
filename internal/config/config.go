@@ -14,12 +14,16 @@ const (
 )
 
 type Config struct {
-	DataDir           string `json:"data_dir"`
-	ListenAddr        string `json:"listen_addr"`
-	APIPort           int    `json:"api_port"`
-	MaxRecentMemories int    `json:"max_recent_memories"`
-	LogLevel          string `json:"log_level"`
-	Version           string `json:"version"`
+	DataDir           string   `json:"data_dir"`
+	ListenAddr        string   `json:"listen_addr"`
+	APIPort           int      `json:"api_port"`
+	MaxRecentMemories int      `json:"max_recent_memories"`
+	LogLevel          string   `json:"log_level"`
+	Version           string   `json:"version"`
+	BootstrapPeers    []string `json:"bootstrap_peers"`
+	MDNSService       string   `json:"mdns_service"`
+	MaxPeersLow       int      `json:"max_peers_low"`
+	MaxPeersHigh      int      `json:"max_peers_high"`
 }
 
 func DefaultConfig() *Config {
@@ -30,6 +34,10 @@ func DefaultConfig() *Config {
 		MaxRecentMemories: 1000,
 		LogLevel:          "info",
 		Version:           "0.1.0",
+		BootstrapPeers:    []string{},
+		MDNSService:       "_dmgn._tcp",
+		MaxPeersLow:       15,
+		MaxPeersHigh:      25,
 	}
 }
 
