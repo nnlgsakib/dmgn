@@ -29,6 +29,7 @@ and resilient to node failure.`,
 	rootCmd.AddCommand(cli.PeersCmd())
 	rootCmd.AddCommand(cli.ExportCmd())
 	rootCmd.AddCommand(cli.ImportCmd())
+	rootCmd.AddCommand(cli.MCPServeCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
