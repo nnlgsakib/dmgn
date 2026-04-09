@@ -32,6 +32,7 @@ type Config struct {
 	QueryTimeout      string   `json:"query_timeout"`
 	SyncInterval      string   `json:"sync_interval"`
 	GossipTopic       string   `json:"gossip_topic"`
+	OTLPEndpoint      string   `json:"otlp_endpoint"`
 }
 
 func DefaultConfig() *Config {
@@ -126,6 +127,10 @@ func (c *Config) StorageDir() string {
 
 func (c *Config) BackupDir() string {
 	return filepath.Join(c.DataDir, "backups")
+}
+
+func (c *Config) LogDir() string {
+	return filepath.Join(c.DataDir, "logs")
 }
 
 func (c *Config) VectorIndexPath() string {
