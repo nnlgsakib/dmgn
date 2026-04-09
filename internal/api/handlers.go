@@ -43,6 +43,11 @@ type StatusResponse struct {
 	Version string       `json:"version"`
 	Storage StorageStats `json:"storage"`
 	Network NetworkStats `json:"network"`
+	Shards  ShardStats   `json:"shards"`
+}
+
+type ShardStats struct {
+	LocalShards int64 `json:"local_shards"`
 }
 
 type StorageStats struct {
@@ -198,6 +203,12 @@ func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	shardStats, _ := s.store.GetShardStats()
+	var localShards int64
+	if shardStats != nil {
+		localShards = shardStats["shard_count"]
+	}
+
 	writeJSON(w, http.StatusOK, StatusResponse{
 		NodeID:  s.identity.ID,
 		Version: s.config.Version,
@@ -207,6 +218,9 @@ func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
 			Path:        s.store.Path(),
 		},
 		Network: netStats,
+		Shards: ShardStats{
+			LocalShards: localShards,
+		},
 	})
 }
 

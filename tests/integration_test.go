@@ -19,6 +19,7 @@ import (
 	"github.com/dmgn/dmgn/pkg/identity"
 	"github.com/dmgn/dmgn/pkg/memory"
 	"github.com/dmgn/dmgn/pkg/network"
+	"github.com/dmgn/dmgn/pkg/sharding"
 	"github.com/dmgn/dmgn/pkg/storage"
 )
 
@@ -616,5 +617,255 @@ func TestTwoPeersDiscoverViaDirect(t *testing.T) {
 	peers2 := h2.ConnectedPeers()
 	if len(peers2) != 1 || peers2[0].ID != h1.ID().String() {
 		t.Errorf("h2 should see h1 as connected peer")
+	}
+}
+
+func TestShardDistributeAndReconstruct(t *testing.T) {
+	// Create a memory, shard it, store shards locally, and reconstruct
+	dir := t.TempDir()
+	store, err := storage.New(storage.Options{DataDir: dir})
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	id, err := identity.Generate("test-passphrase", t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to generate identity: %v", err)
+	}
+
+	masterKey, err := id.DeriveKey("memory-encryption", 32)
+	if err != nil {
+		t.Fatalf("failed to derive key: %v", err)
+	}
+
+	engine, err := crypto.NewEngine(masterKey)
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+
+	plaintext := &memory.PlaintextMemory{
+		Content: "This is a secret memory for shard testing",
+		Type:    memory.TypeText,
+	}
+	mem, err := memory.Create(plaintext, nil, func(data []byte) ([]byte, error) {
+		return engine.Encrypt(data)
+	})
+	if err != nil {
+		t.Fatalf("failed to create memory: %v", err)
+	}
+
+	// Shard the memory
+	cfg := sharding.ShardConfig{Threshold: 3, TotalShards: 5}
+	shards, err := sharding.ShardMemory(mem, cfg)
+	if err != nil {
+		t.Fatalf("ShardMemory failed: %v", err)
+	}
+
+	if len(shards) != 5 {
+		t.Fatalf("expected 5 shards, got %d", len(shards))
+	}
+
+	// Store all shards locally
+	for i := range shards {
+		if err := store.SaveShard(&shards[i]); err != nil {
+			t.Fatalf("SaveShard %d failed: %v", i, err)
+		}
+	}
+
+	// Verify shard stats
+	stats, err := store.GetShardStats()
+	if err != nil {
+		t.Fatalf("GetShardStats failed: %v", err)
+	}
+	if stats["shard_count"] != 5 {
+		t.Errorf("expected 5 shards in store, got %d", stats["shard_count"])
+	}
+
+	// Reconstruct from threshold shards (first 3)
+	retrieved := make([]sharding.Shard, 0, 3)
+	for i := 0; i < 3; i++ {
+		s, err := store.GetShard(mem.ID, i)
+		if err != nil {
+			t.Fatalf("GetShard %d failed: %v", i, err)
+		}
+		retrieved = append(retrieved, *s)
+	}
+
+	payload, err := sharding.ReconstructPayload(retrieved)
+	if err != nil {
+		t.Fatalf("ReconstructPayload failed: %v", err)
+	}
+
+	if !bytes.Equal(payload, mem.EncryptedPayload) {
+		t.Error("reconstructed payload does not match original encrypted payload")
+	}
+
+	// Decrypt to verify full round trip
+	decrypted, err := engine.Decrypt(payload)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+
+	var result memory.PlaintextMemory
+	if err := json.Unmarshal(decrypted, &result); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if result.Content != "This is a secret memory for shard testing" {
+		t.Errorf("content mismatch: %q", result.Content)
+	}
+}
+
+func TestProtocolStoreAndFetch(t *testing.T) {
+	// Two libp2p hosts: store a shard on peer B via protocol, fetch it back
+	id1, err := identity.Generate("pass1", t.TempDir())
+	if err != nil {
+		t.Fatalf("identity 1: %v", err)
+	}
+	id2, err := identity.Generate("pass2", t.TempDir())
+	if err != nil {
+		t.Fatalf("identity 2: %v", err)
+	}
+
+	key1, _ := network.DeriveLibp2pKey(id1)
+	key2, _ := network.DeriveLibp2pKey(id2)
+
+	h1, err := network.NewHost(network.HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key1,
+	})
+	if err != nil {
+		t.Fatalf("host 1: %v", err)
+	}
+	defer h1.Stop()
+
+	h2, err := network.NewHost(network.HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key2,
+	})
+	if err != nil {
+		t.Fatalf("host 2: %v", err)
+	}
+	defer h2.Stop()
+
+	// Set up storage on h2 and register protocol handlers
+	store2, err := storage.New(storage.Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("store 2: %v", err)
+	}
+	defer store2.Close()
+
+	h2.RegisterStoreHandler(store2)
+	h2.RegisterFetchHandler(store2)
+
+	// Connect h1 -> h2
+	h2Info := peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}
+	if err := h1.LibP2PHost().Connect(context.Background(), h2Info); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	// Create a test shard and send via store protocol
+	testData := []byte("protocol-test-shard-data-content")
+	cfg := sharding.ShardConfig{Threshold: 2, TotalShards: 3}
+	mem := &memory.Memory{
+		ID:               "proto-mem-001",
+		EncryptedPayload: testData,
+	}
+	shards, err := sharding.ShardMemory(mem, cfg)
+	if err != nil {
+		t.Fatalf("ShardMemory: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Send shard 0 to h2
+	err = h1.SendShard(ctx, h2.ID(), &shards[0])
+	if err != nil {
+		t.Fatalf("SendShard: %v", err)
+	}
+
+	// Fetch shard 0 back from h2
+	fetched, err := h1.FetchShard(ctx, h2.ID(), "proto-mem-001", 0)
+	if err != nil {
+		t.Fatalf("FetchShard: %v", err)
+	}
+
+	if !bytes.Equal(fetched.Data, shards[0].Data) {
+		t.Error("fetched shard data does not match sent shard data")
+	}
+	if fetched.MemoryID != "proto-mem-001" {
+		t.Errorf("wrong memory_id: %s", fetched.MemoryID)
+	}
+	if fetched.ShardIndex != 0 {
+		t.Errorf("wrong shard_index: %d", fetched.ShardIndex)
+	}
+}
+
+func TestShardDistributionInsufficientPeers(t *testing.T) {
+	// Single node with no peers — all shards stored locally
+	dir := t.TempDir()
+	store, err := storage.New(storage.Options{DataDir: dir})
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	id, err := identity.Generate("test-passphrase", t.TempDir())
+	if err != nil {
+		t.Fatalf("identity: %v", err)
+	}
+
+	masterKey, _ := id.DeriveKey("memory-encryption", 32)
+	engine, _ := crypto.NewEngine(masterKey)
+
+	plaintext := &memory.PlaintextMemory{
+		Content: "No peers available memory",
+		Type:    memory.TypeText,
+	}
+	mem, _ := memory.Create(plaintext, nil, func(data []byte) ([]byte, error) {
+		return engine.Encrypt(data)
+	})
+
+	cfg := sharding.ShardConfig{Threshold: 3, TotalShards: 5}
+	shards, err := sharding.ShardMemory(mem, cfg)
+	if err != nil {
+		t.Fatalf("ShardMemory: %v", err)
+	}
+
+	// Store all locally (simulating no peers)
+	for i := range shards {
+		if err := store.SaveShard(&shards[i]); err != nil {
+			t.Fatalf("SaveShard %d: %v", i, err)
+		}
+	}
+
+	// All 5 shards stored locally
+	localShards, err := store.GetShardsForMemory(mem.ID)
+	if err != nil {
+		t.Fatalf("GetShardsForMemory: %v", err)
+	}
+	if len(localShards) != 5 {
+		t.Errorf("expected 5 local shards, got %d", len(localShards))
+	}
+
+	// Can still reconstruct from local shards
+	deref := make([]sharding.Shard, len(localShards))
+	for i, s := range localShards {
+		deref[i] = *s
+	}
+	payload, err := sharding.ReconstructPayload(deref[:3])
+	if err != nil {
+		t.Fatalf("ReconstructPayload: %v", err)
+	}
+	if !bytes.Equal(payload, mem.EncryptedPayload) {
+		t.Error("local reconstruction failed")
 	}
 }

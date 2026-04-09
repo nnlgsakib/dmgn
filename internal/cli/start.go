@@ -15,6 +15,7 @@ import (
 	"github.com/dmgn/dmgn/internal/crypto"
 	"github.com/dmgn/dmgn/pkg/identity"
 	"github.com/dmgn/dmgn/pkg/network"
+	"github.com/dmgn/dmgn/pkg/sharding"
 	"github.com/dmgn/dmgn/pkg/storage"
 )
 
@@ -109,6 +110,27 @@ func StartCmd() *cobra.Command {
 					return fmt.Errorf("failed to create API server: %w", err)
 				}
 				server.SetNetworkHost(h)
+
+				// Register shard protocol handlers
+				h.RegisterStoreHandler(store)
+				h.RegisterFetchHandler(store)
+
+				// Set up shard distributor and rebalancing
+				shardCfg := sharding.ShardConfig{
+					Threshold:   cfg.ShardThreshold,
+					TotalShards: cfg.ShardCount,
+				}
+				var router *network.ShardRouter
+				if h.DHT() != nil {
+					router = network.NewShardRouter(h.DHT())
+				}
+				_ = sharding.NewDistributor(nil, store, router, shardCfg)
+
+				// Start rebalance auditor
+				auditor := network.NewShardAuditor(nil, 5*time.Minute)
+				auditor.Start(context.Background())
+
+				fmt.Printf("Shard config: threshold=%d, total=%d\n", shardCfg.Threshold, shardCfg.TotalShards)
 
 				apiKeyStr := server.APIKey()
 				fmt.Printf("API Key: %s\n", apiKeyStr)
