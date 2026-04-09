@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
 )
 
 type Type string
@@ -205,6 +207,32 @@ func FromJSON(data []byte) (*Memory, error) {
 		return nil, fmt.Errorf("failed to unmarshal memory: %w", err)
 	}
 	return &m, nil
+}
+
+func (m *Memory) ToProto() *dmgnpb.Memory {
+	return &dmgnpb.Memory{
+		Id:               m.ID,
+		Timestamp:        m.Timestamp,
+		Type:             string(m.Type),
+		Embedding:        m.Embedding,
+		EncryptedPayload: m.EncryptedPayload,
+		Links:            m.Links,
+		MerkleProof:      m.MerkleProof,
+		Metadata:         m.Metadata,
+	}
+}
+
+func MemoryFromProto(pb *dmgnpb.Memory) *Memory {
+	return &Memory{
+		ID:               pb.Id,
+		Timestamp:        pb.Timestamp,
+		Type:             Type(pb.Type),
+		Embedding:        pb.Embedding,
+		EncryptedPayload: pb.EncryptedPayload,
+		Links:            pb.Links,
+		MerkleProof:      pb.MerkleProof,
+		Metadata:         pb.Metadata,
+	}
 }
 
 func calculateMerkleProof(id string, encryptedPayload []byte) string {

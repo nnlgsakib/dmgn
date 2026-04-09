@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/nnlgsakib/dmgn/pkg/sharding"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -134,6 +135,79 @@ func readFrame(r io.Reader, dataLen int) ([]byte, []byte, error) {
 func readHeaderOnly(r io.Reader) ([]byte, error) {
 	headerBytes, _, err := readFrame(r, 0)
 	return headerBytes, err
+}
+
+// writeProtoFrame writes a length-prefixed protobuf message followed by optional data.
+func writeProtoFrame(w io.Writer, msg proto.Message, data []byte) error {
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal proto: %w", err)
+	}
+
+	// Write 4-byte message length (big-endian)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(msgBytes)))
+	if _, err := w.Write(lenBuf); err != nil {
+		return fmt.Errorf("write proto length: %w", err)
+	}
+
+	// Write message
+	if _, err := w.Write(msgBytes); err != nil {
+		return fmt.Errorf("write proto message: %w", err)
+	}
+
+	// Write data if present
+	if len(data) > 0 {
+		if _, err := w.Write(data); err != nil {
+			return fmt.Errorf("write data: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// readProtoFrame reads a length-prefixed protobuf message and optional data of dataLen bytes.
+func readProtoFrame(r io.Reader, msg proto.Message, dataLen int) ([]byte, error) {
+	// Read 4-byte message length
+	lenBuf := make([]byte, 4)
+	if _, err := io.ReadFull(r, lenBuf); err != nil {
+		return nil, fmt.Errorf("read proto length: %w", err)
+	}
+	msgLen := binary.BigEndian.Uint32(lenBuf)
+
+	if msgLen > maxHeaderLen {
+		return nil, fmt.Errorf("proto message too large: %d bytes", msgLen)
+	}
+
+	// Read message
+	msgBytes := make([]byte, msgLen)
+	if _, err := io.ReadFull(r, msgBytes); err != nil {
+		return nil, fmt.Errorf("read proto message: %w", err)
+	}
+
+	if err := proto.Unmarshal(msgBytes, msg); err != nil {
+		return nil, fmt.Errorf("unmarshal proto: %w", err)
+	}
+
+	// Read data if expected
+	var data []byte
+	if dataLen > 0 {
+		if dataLen > maxShardLen {
+			return nil, fmt.Errorf("data too large: %d bytes", dataLen)
+		}
+		data = make([]byte, dataLen)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return nil, fmt.Errorf("read data: %w", err)
+		}
+	}
+
+	return data, nil
+}
+
+// readProtoHeaderOnly reads just the length-prefixed protobuf header (no data).
+func readProtoHeaderOnly(r io.Reader, msg proto.Message) error {
+	_, err := readProtoFrame(r, msg, 0)
+	return err
 }
 
 // RegisterStoreHandler registers the /dmgn/memory/store/1.0.0 stream handler.

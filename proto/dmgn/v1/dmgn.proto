@@ -1,6 +1,6 @@
 syntax = "proto3";
 package dmgn.v1;
-option go_package = "github.com/nnlgsakib/dmgn/proto/dmgnpb";
+option go_package = "github.com/nnlgsakib/dmgn/proto/dmgn/v1;dmgnpb";
 
 // Memory is the core data structure (wire format for network transmission).
 message Memory {

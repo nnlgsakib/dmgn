@@ -972,7 +972,7 @@ const file_proto_dmgn_v1_dmgn_proto_rawDesc = "" +
 	"\rQueryResponse\x12\x19\n" +
 	"\bquery_id\x18\x01 \x01(\tR\aqueryId\x12.\n" +
 	"\aresults\x18\x02 \x03(\v2\x14.dmgn.v1.QueryResultR\aresults\x12%\n" +
-	"\x0etotal_searched\x18\x03 \x01(\x05R\rtotalSearchedB(Z&github.com/nnlgsakib/dmgn/proto/dmgnpbb\x06proto3"
+	"\x0etotal_searched\x18\x03 \x01(\x05R\rtotalSearchedB0Z.github.com/nnlgsakib/dmgn/proto/dmgn/v1;dmgnpbb\x06proto3"
 
 var (
 	file_proto_dmgn_v1_dmgn_proto_rawDescOnce sync.Once
