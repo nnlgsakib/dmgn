@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
 )
 
 func InitCmd() *cobra.Command {

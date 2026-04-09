@@ -42,7 +42,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 ### Building
 
 ```bash
-git clone https://github.com/dmgn/dmgn
+git clone https://github.com/nnlgsakib/dmgn
 cd dmgn
 go build -o dmgn ./cmd/dmgn
 ```

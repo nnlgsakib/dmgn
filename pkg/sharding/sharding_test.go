@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/dmgn/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
 )
 
 func TestShardMemory(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
-	"github.com/dmgn/dmgn/pkg/memory"
-	"github.com/dmgn/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
 )
 
 // SyncProtocol is the protocol ID for delta sync.

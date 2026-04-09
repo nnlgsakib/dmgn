@@ -3,7 +3,7 @@ package storage
 import (
 	"testing"
 
-	"github.com/dmgn/dmgn/pkg/sharding"
+	"github.com/nnlgsakib/dmgn/pkg/sharding"
 )
 
 func TestSaveGetShard(t *testing.T) {

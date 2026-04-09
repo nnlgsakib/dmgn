@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmgn/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
 )
 
 func createTestMemory(t *testing.T, content string, ts int64) *memory.Memory {

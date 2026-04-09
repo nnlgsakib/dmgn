@@ -70,7 +70,7 @@ User owns their identity and memory data that persists across devices and time, 
 ### Build from source
 
 ```bash
-git clone https://github.com/dmgn/dmgn
+git clone https://github.com/nnlgsakib/dmgn
 cd dmgn
 go build -o dmgn ./cmd/dmgn
 ```
@@ -340,7 +340,7 @@ If you discover a security vulnerability, please report it responsibly:
 
 Join the conversation:
 
-- [GitHub Discussions](https://github.com/dmgn/dmgn/discussions) - Q&A and ideas
+- [GitHub Discussions](https://github.com/nnlgsakib/dmgn/discussions) - Q&A and ideas
 - [Discord](https://discord.gg/dmgn) - Real-time chat
 
 ### Staying Updated

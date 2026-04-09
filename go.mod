@@ -1,4 +1,4 @@
-module github.com/dmgn/dmgn
+module github.com/nnlgsakib/dmgn
 
 go 1.25.7
 

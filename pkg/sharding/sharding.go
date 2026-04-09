@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/dmgn/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
 )
 
 // ShardConfig holds configuration for memory sharding.

@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dmgn/dmgn/internal/api"
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/internal/crypto"
-	"github.com/dmgn/dmgn/pkg/identity"
-	"github.com/dmgn/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/internal/api"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
 )
 
 func ServeCmd() *cobra.Command {

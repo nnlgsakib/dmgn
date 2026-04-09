@@ -96,4 +96,4 @@ Log files are written to `{data_dir}/logs/dmgn.log` with automatic rotation.
 
 - Check logs: `{data_dir}/logs/dmgn.log`
 - Run with debug: `--log-level debug`
-- File issues: https://github.com/dmgn/dmgn/issues
+- File issues: https://github.com/nnlgsakib/dmgn/issues

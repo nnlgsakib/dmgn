@@ -8,12 +8,12 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/internal/crypto"
-	"github.com/dmgn/dmgn/pkg/memory"
-	"github.com/dmgn/dmgn/pkg/query"
-	"github.com/dmgn/dmgn/pkg/storage"
-	"github.com/dmgn/dmgn/pkg/vectorindex"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/query"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
 
 func setupTestServer(t *testing.T) (*MCPServer, string) {

@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dmgn/dmgn/pkg/memory"
-	"github.com/dmgn/dmgn/pkg/storage"
-	"github.com/dmgn/dmgn/pkg/vectorindex"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
 
 // QueryEngine handles local memory search with hybrid vector + text scoring.

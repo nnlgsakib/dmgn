@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
 )
 
 func ImportCmd() *cobra.Command {

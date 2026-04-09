@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/dmgn/dmgn/internal/cli"
+	"github.com/nnlgsakib/dmgn/internal/cli"
 )
 
 func main() {

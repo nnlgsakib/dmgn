@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dmgn/dmgn/pkg/sharding"
+	"github.com/nnlgsakib/dmgn/pkg/sharding"
 )
 
 const PrefixShard = "shard:"

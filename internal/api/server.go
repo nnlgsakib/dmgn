@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/internal/crypto"
-	"github.com/dmgn/dmgn/pkg/identity"
-	"github.com/dmgn/dmgn/pkg/network"
-	"github.com/dmgn/dmgn/pkg/query"
-	"github.com/dmgn/dmgn/pkg/storage"
-	"github.com/dmgn/dmgn/pkg/sync"
-	"github.com/dmgn/dmgn/pkg/vectorindex"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/pkg/network"
+	"github.com/nnlgsakib/dmgn/pkg/query"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/pkg/sync"
+	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
 
 type Server struct {

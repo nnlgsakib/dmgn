@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/internal/crypto"
-	dmgnmcp "github.com/dmgn/dmgn/pkg/mcp"
-	"github.com/dmgn/dmgn/pkg/identity"
-	"github.com/dmgn/dmgn/pkg/query"
-	"github.com/dmgn/dmgn/pkg/storage"
-	"github.com/dmgn/dmgn/pkg/vectorindex"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/internal/crypto"
+	dmgnmcp "github.com/nnlgsakib/dmgn/pkg/mcp"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/pkg/query"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
 
 // MCPServeCmd returns the cobra command for `dmgn mcp-serve`.

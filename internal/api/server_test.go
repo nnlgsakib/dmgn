@@ -8,10 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dmgn/dmgn/internal/config"
-	"github.com/dmgn/dmgn/internal/crypto"
-	"github.com/dmgn/dmgn/pkg/identity"
-	"github.com/dmgn/dmgn/pkg/storage"
+	"github.com/nnlgsakib/dmgn/internal/config"
+	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/pkg/storage"
 )
 
 type testEnv struct {
