@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -18,15 +19,17 @@ const (
 )
 
 type Store struct {
-	db     *badger.DB
-	graph  *memory.Graph
-	datadir string
+	db           *badger.DB
+	graph        *memory.Graph
+	datadir      string
+	maxRetention int
 }
 
 type Options struct {
-	DataDir        string
-	MaxTableSize   int64
+	DataDir            string
+	MaxTableSize       int64
 	ValueLogMaxEntries uint
+	MaxRetention       int
 }
 
 func DefaultOptions(dataDir string) Options {
@@ -40,8 +43,7 @@ func DefaultOptions(dataDir string) Options {
 func New(opts Options) (*Store, error) {
 	badgerOpts := badger.DefaultOptions(opts.DataDir)
 	badgerOpts = badgerOpts.WithLogger(nil)
-	badgerOpts.MaxTableSize = opts.MaxTableSize
-	badgerOpts.ValueLogMaxEntries = opts.ValueLogMaxEntries
+	badgerOpts.ValueLogMaxEntries = uint32(opts.ValueLogMaxEntries)
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
@@ -49,9 +51,10 @@ func New(opts Options) (*Store, error) {
 	}
 
 	store := &Store{
-		db:      db,
-		graph:   memory.NewGraph(),
-		datadir: opts.DataDir,
+		db:           db,
+		graph:        memory.NewGraph(),
+		datadir:      opts.DataDir,
+		maxRetention: opts.MaxRetention,
 	}
 
 	if err := store.loadGraph(); err != nil {
@@ -71,7 +74,7 @@ func (s *Store) DataDir() string {
 }
 
 func (s *Store) SaveMemory(m *memory.Memory) error {
-	return s.db.Update(func(txn *badger.Txn) error {
+	err := s.db.Update(func(txn *badger.Txn) error {
 		memKey := []byte(PrefixMemory + m.ID)
 		memData, err := m.ToJSON()
 		if err != nil {
@@ -96,6 +99,17 @@ func (s *Store) SaveMemory(m *memory.Memory) error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	if s.maxRetention > 0 {
+		if _, err := s.EnforceRetention(); err != nil {
+			return fmt.Errorf("failed to enforce retention: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Store) GetMemory(id string) (*memory.Memory, error) {
@@ -369,7 +383,12 @@ func splitEdgeKey(key string) []string {
 }
 
 func (s *Store) Backup(path string) error {
-	_, err := s.db.Backup(nil, filepath.Join(path, "backup.bdg"))
+	f, err := os.Create(filepath.Join(path, "backup.bdg"))
+	if err != nil {
+		return fmt.Errorf("failed to create backup file: %w", err)
+	}
+	defer f.Close()
+	_, err = s.db.Backup(f, 0)
 	return err
 }
 

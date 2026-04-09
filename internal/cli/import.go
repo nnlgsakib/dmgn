@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -37,7 +38,7 @@ func ImportCmd() *cobra.Command {
 
 			if inFile == "" || inFile == "-" {
 				fmt.Println("Reading identity from stdin...")
-				keyData, errRead = os.ReadAll(os.Stdin)
+				keyData, errRead = io.ReadAll(os.Stdin)
 			} else {
 				keyData, errRead = os.ReadFile(inFile)
 			}

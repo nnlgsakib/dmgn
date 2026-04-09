@@ -142,9 +142,15 @@ func TestDeriveKey(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	key1 := id.DeriveKey("test-purpose", 0)
-	key2 := id.DeriveKey("test-purpose", 0)
-	key3 := id.DeriveKey("test-purpose", 1)
+	// Test determinism: same identity + same purpose → same key
+	key1, err := id.DeriveKey("test-purpose", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey failed: %v", err)
+	}
+	key2, err := id.DeriveKey("test-purpose", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey failed: %v", err)
+	}
 
 	if len(key1) != 32 {
 		t.Errorf("Derived key length should be 32, got %d", len(key1))
@@ -152,9 +158,15 @@ func TestDeriveKey(t *testing.T) {
 
 	for i := range key1 {
 		if key1[i] != key2[i] {
-			t.Error("Same purpose and index should produce same key")
+			t.Error("Same purpose should produce same key")
 			break
 		}
+	}
+
+	// Test separation: same identity + different purpose → different keys
+	key3, err := id.DeriveKey("different-purpose", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey failed: %v", err)
 	}
 
 	different := false
@@ -166,7 +178,18 @@ func TestDeriveKey(t *testing.T) {
 	}
 
 	if !different {
-		t.Error("Different index should produce different key")
+		t.Error("Different purpose should produce different key")
+	}
+
+	// Test key length: request 16, 32, 64 bytes → correct lengths returned
+	for _, keyLen := range []int{16, 32, 64} {
+		k, err := id.DeriveKey("test-len", keyLen)
+		if err != nil {
+			t.Fatalf("DeriveKey(%d) failed: %v", keyLen, err)
+		}
+		if len(k) != keyLen {
+			t.Errorf("Expected key length %d, got %d", keyLen, len(k))
+		}
 	}
 }
 

@@ -44,7 +44,10 @@ func QueryCmd() *cobra.Command {
 				return fmt.Errorf("failed to load identity: %w", err)
 			}
 
-			masterKey := id.DeriveKey("memory-encryption", 0)
+			masterKey, err := id.DeriveKey("memory-encryption", 32)
+			if err != nil {
+				return fmt.Errorf("failed to derive master key: %w", err)
+			}
 			cryptoEngine, err := crypto.NewEngine(masterKey)
 			if err != nil {
 				return fmt.Errorf("failed to initialize crypto: %w", err)

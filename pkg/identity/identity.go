@@ -4,14 +4,16 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base58"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/mr-tron/base58"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/crypto/hkdf"
 )
 
 const (
@@ -182,10 +184,13 @@ func (i *Identity) Verify(data []byte, signature []byte) bool {
 	return ed25519.Verify(i.PublicKey, data, signature)
 }
 
-func (i *Identity) DeriveKey(purpose string, index uint32) []byte {
-	seed := sha256.Sum256(append(i.PrivateKey.Seed(), []byte(purpose)...))
-	for i := uint32(0); i < index; i++ {
-		seed = sha256.Sum256(seed[:])
+func (i *Identity) DeriveKey(purpose string, keyLen int) ([]byte, error) {
+	ikm := i.PrivateKey.Seed()
+	info := []byte(purpose)
+	reader := hkdf.New(sha256.New, ikm, nil, info)
+	key := make([]byte, keyLen)
+	if _, err := io.ReadFull(reader, key); err != nil {
+		return nil, fmt.Errorf("HKDF key derivation failed: %w", err)
 	}
-	return seed[:]
+	return key, nil
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -39,7 +40,8 @@ func (e *Engine) Encrypt(plaintext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encrypt payload: %w", err)
 	}
 
-	result := make([]byte, 0, len(encryptedKey)+len(encryptedPayload))
+	result := make([]byte, 2, 2+len(encryptedKey)+len(encryptedPayload))
+	binary.BigEndian.PutUint16(result[:2], uint16(len(encryptedKey)))
 	result = append(result, encryptedKey...)
 	result = append(result, encryptedPayload...)
 
@@ -47,13 +49,16 @@ func (e *Engine) Encrypt(plaintext []byte) ([]byte, error) {
 }
 
 func (e *Engine) Decrypt(ciphertext []byte) ([]byte, error) {
-	if len(ciphertext) < 60 {
+	if len(ciphertext) < 4 {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
 
-	encryptedKeyLen := 28
-	encryptedKey := ciphertext[:encryptedKeyLen]
-	encryptedPayload := ciphertext[encryptedKeyLen:]
+	keyLen := int(binary.BigEndian.Uint16(ciphertext[:2]))
+	if len(ciphertext) < 2+keyLen {
+		return nil, fmt.Errorf("ciphertext too short for encrypted key length %d", keyLen)
+	}
+	encryptedKey := ciphertext[2 : 2+keyLen]
+	encryptedPayload := ciphertext[2+keyLen:]
 
 	perMemoryKey, err := e.decryptWithMaster(encryptedKey)
 	if err != nil {

@@ -67,8 +67,6 @@ func InitCmd() *cobra.Command {
 }
 
 func promptPassphrase() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-
 	for {
 		fmt.Print("Enter passphrase: ")
 		pass1, err := term.ReadPassword(int(syscall.Stdin))

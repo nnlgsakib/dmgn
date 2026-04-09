@@ -10,12 +10,19 @@
     "plan_check": true,
     "verifier": true,
     "nyquist_validation": true,
-    "auto_advance": true
+    "auto_advance": true,
+    "_auto_chain_active": false
   },
   "project": {
     "name": "DMGN",
     "description": "Distributed Memory Graph Network - decentralized encrypted memory layer for AI agents",
-    "tech_stack": ["Go", "libp2p", "BadgerDB", "Cobra", "MCP"],
+    "tech_stack": [
+      "Go",
+      "libp2p",
+      "BadgerDB",
+      "Cobra",
+      "MCP"
+    ],
     "type": "greenfield"
   },
   "created_at": "2025-04-09T09:13:00Z"
