@@ -24,6 +24,8 @@ type Config struct {
 	MDNSService       string   `json:"mdns_service"`
 	MaxPeersLow       int      `json:"max_peers_low"`
 	MaxPeersHigh      int      `json:"max_peers_high"`
+	ShardThreshold    int      `json:"shard_threshold"`
+	ShardCount        int      `json:"shard_count"`
 }
 
 func DefaultConfig() *Config {
@@ -38,6 +40,8 @@ func DefaultConfig() *Config {
 		MDNSService:       "_dmgn._tcp",
 		MaxPeersLow:       15,
 		MaxPeersHigh:      25,
+		ShardThreshold:    3,
+		ShardCount:        5,
 	}
 }
 

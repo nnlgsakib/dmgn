@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "read": {
+      "D:/projects/go/research26/DMGN/.opencode/get-shit-done/*": "allow"
+    },
+    "external_directory": {
+      "D:/projects/go/research26/DMGN/.opencode/get-shit-done/*": "allow"
+    }
+  }
+}
