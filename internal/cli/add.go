@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -15,9 +16,10 @@ import (
 
 func AddCmd() *cobra.Command {
 	var (
-		memoryType string
-		links      []string
-		dataDir    string
+		memoryType   string
+		links        []string
+		dataDir      string
+		embeddingStr string
 	)
 
 	cmd := &cobra.Command{
@@ -79,6 +81,15 @@ func AddCmd() *cobra.Command {
 				return fmt.Errorf("failed to create memory: %w", err)
 			}
 
+			// Set embedding if provided
+			if embeddingStr != "" {
+				var embedding []float32
+				if err := json.Unmarshal([]byte(embeddingStr), &embedding); err != nil {
+					return fmt.Errorf("invalid embedding JSON: %w", err)
+				}
+				mem.Embedding = embedding
+			}
+
 			store, err := storage.New(storage.Options{
 				DataDir: cfg.StorageDir(),
 			})
@@ -103,6 +114,7 @@ func AddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&memoryType, "type", "text", "Memory type (text, conversation, observation)")
 	cmd.Flags().StringSliceVar(&links, "link", nil, "Link to memory IDs")
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory")
+	cmd.Flags().StringVar(&embeddingStr, "embedding", "", "JSON array of float32 embedding values")
 
 	return cmd
 }

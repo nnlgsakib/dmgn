@@ -413,3 +413,8 @@ func (s *Store) Backup(path string) error {
 func (s *Store) Path() string {
 	return s.datadir
 }
+
+// DB returns the underlying BadgerDB instance for cross-package use.
+func (s *Store) DB() *badger.DB {
+	return s.db
+}

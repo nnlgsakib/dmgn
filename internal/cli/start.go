@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,9 +15,13 @@ import (
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/internal/crypto"
 	"github.com/dmgn/dmgn/pkg/identity"
+	"github.com/dmgn/dmgn/pkg/memory"
 	"github.com/dmgn/dmgn/pkg/network"
+	"github.com/dmgn/dmgn/pkg/query"
 	"github.com/dmgn/dmgn/pkg/sharding"
 	"github.com/dmgn/dmgn/pkg/storage"
+	pkgsync "github.com/dmgn/dmgn/pkg/sync"
+	"github.com/dmgn/dmgn/pkg/vectorindex"
 )
 
 func StartCmd() *cobra.Command {
@@ -131,6 +136,112 @@ func StartCmd() *cobra.Command {
 				auditor.Start(context.Background())
 
 				fmt.Printf("Shard config: threshold=%d, total=%d\n", shardCfg.Threshold, shardCfg.TotalShards)
+
+				// --- Phase 5: Query & Sync wiring ---
+
+				// 1. Derive vector index encryption key
+				indexKey, err := id.DeriveKey("vector-index", 32)
+				if err != nil {
+					h.Stop()
+					return fmt.Errorf("failed to derive vector index key: %w", err)
+				}
+				indexCrypto, err := crypto.NewEngine(indexKey)
+				if err != nil {
+					h.Stop()
+					return fmt.Errorf("failed to init vector index crypto: %w", err)
+				}
+
+				// 2. Create and load vector index
+				vecIndex := vectorindex.NewVectorIndex(
+					cfg.VectorIndexPath(),
+					indexCrypto.Encrypt,
+					indexCrypto.Decrypt,
+				)
+				if err := vecIndex.Load(); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to load vector index: %v\n", err)
+				}
+				defer func() {
+					if vecIndex.Dirty() {
+						if err := vecIndex.Save(); err != nil {
+							fmt.Fprintf(os.Stderr, "Warning: failed to save vector index: %v\n", err)
+						}
+					}
+				}()
+
+				// 3. Create query engine
+				decryptFn := func(ciphertext []byte) ([]byte, error) {
+					return cryptoEngine.Decrypt(ciphertext)
+				}
+				queryEngine := query.NewQueryEngine(vecIndex, store, decryptFn, cfg.HybridScoreAlpha)
+
+				// 4. Create remote query orchestrator
+				remoteOrch := query.NewRemoteQueryOrchestrator(
+					h.LibP2PHost(), queryEngine, h.ID().String(), cfg.QueryTimeoutDuration(),
+				)
+
+				// 5. Register query protocol handler
+				query.RegisterQueryHandler(h.LibP2PHost(), queryEngine, h.ID().String())
+
+				// 6. Set up version vector
+				vvStore := pkgsync.NewVClockStore(store.DB())
+				vv, err := vvStore.Load(h.ID().String())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to load version vector: %v\n", err)
+					vv = pkgsync.NewVersionVector()
+				}
+
+				// 7. Memory receive callback (shared by gossip + delta sync)
+				onMemoryReceived := func(mem *memory.Memory) {
+					store.SaveMemory(mem)
+					if len(mem.Embedding) > 0 {
+						vecIndex.Add(mem.ID, mem.Embedding)
+					}
+				}
+
+				// 8. Start gossip manager
+				nodeCtx, nodeCancel := context.WithCancel(context.Background())
+				defer nodeCancel()
+
+				gossipMgr, err := pkgsync.NewGossipManager(nodeCtx, h.LibP2PHost(), cfg.GossipTopic,
+					func(msg *pkgsync.GossipMessage) {
+						var mem memory.Memory
+						if err := json.Unmarshal(msg.Memory, &mem); err != nil {
+							return
+						}
+						onMemoryReceived(&mem)
+						// Update version vector from gossip
+						if msg.Sequence > vv.Get(msg.SenderPeerID) {
+							vv.Set(msg.SenderPeerID, msg.Sequence)
+							vvStore.SaveSequence(msg.SenderPeerID, msg.Sequence, mem.ID)
+							vvStore.Save(h.ID().String(), vv)
+						}
+					})
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: gossip init failed: %v\n", err)
+				} else {
+					gossipMgr.Start(nodeCtx)
+					defer gossipMgr.Stop()
+					fmt.Printf("GossipSub: topic=%s\n", cfg.GossipTopic)
+				}
+
+				// 9. Start delta sync manager
+				deltaMgr := pkgsync.NewDeltaSyncManager(
+					h.LibP2PHost(), vv, vvStore, store,
+					h.ID().String(), cfg.SyncIntervalDuration(), onMemoryReceived,
+				)
+				deltaMgr.RegisterHandler()
+				deltaMgr.Start(nodeCtx)
+				defer deltaMgr.Stop()
+				fmt.Printf("Delta sync: interval=%s\n", cfg.SyncInterval)
+
+				// 10. Wire query engine and gossip into API server
+				server.SetQueryEngine(queryEngine, remoteOrch)
+				if gossipMgr != nil {
+					server.SetGossipManager(gossipMgr)
+				}
+				server.SetVectorIndex(vecIndex)
+
+				fmt.Printf("Query engine: alpha=%.2f, timeout=%s\n", cfg.HybridScoreAlpha, cfg.QueryTimeout)
 
 				apiKeyStr := server.APIKey()
 				fmt.Printf("API Key: %s\n", apiKeyStr)

@@ -56,6 +56,18 @@ type QueryResult struct {
 	SourcePeer string  `json:"source_peer,omitempty"`
 }
 
+// BuildRequest creates a QueryRequest from common parameters.
+func (qe *QueryEngine) BuildRequest(textQuery string, embedding []float32, limit int) QueryRequest {
+	if limit <= 0 {
+		limit = 10
+	}
+	return QueryRequest{
+		TextQuery: textQuery,
+		Embedding: embedding,
+		Limit:     limit,
+	}
+}
+
 // SearchLocal performs a local hybrid search (vector + text).
 func (qe *QueryEngine) SearchLocal(req QueryRequest) ([]QueryResult, error) {
 	if req.Limit <= 0 {

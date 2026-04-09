@@ -10,7 +10,10 @@ import (
 	"github.com/dmgn/dmgn/internal/crypto"
 	"github.com/dmgn/dmgn/pkg/identity"
 	"github.com/dmgn/dmgn/pkg/network"
+	"github.com/dmgn/dmgn/pkg/query"
 	"github.com/dmgn/dmgn/pkg/storage"
+	"github.com/dmgn/dmgn/pkg/sync"
+	"github.com/dmgn/dmgn/pkg/vectorindex"
 )
 
 type Server struct {
@@ -21,6 +24,10 @@ type Server struct {
 	auth        *AuthMiddleware
 	httpServer  *http.Server
 	networkHost *network.Host
+	queryEngine *query.QueryEngine
+	remoteOrch  *query.RemoteQueryOrchestrator
+	gossipMgr   *sync.GossipManager
+	vecIndex    *vectorindex.VectorIndex
 }
 
 func NewServer(cfg *config.Config, store *storage.Store, cryptoEng *crypto.Engine, id *identity.Identity) (*Server, error) {
@@ -53,6 +60,22 @@ func NewServer(cfg *config.Config, store *storage.Store, cryptoEng *crypto.Engin
 // SetNetworkHost attaches a network host to the server for live network stats.
 func (s *Server) SetNetworkHost(h *network.Host) {
 	s.networkHost = h
+}
+
+// SetQueryEngine attaches the query engine and remote orchestrator.
+func (s *Server) SetQueryEngine(qe *query.QueryEngine, ro *query.RemoteQueryOrchestrator) {
+	s.queryEngine = qe
+	s.remoteOrch = ro
+}
+
+// SetGossipManager attaches the gossip manager for memory propagation.
+func (s *Server) SetGossipManager(gm *sync.GossipManager) {
+	s.gossipMgr = gm
+}
+
+// SetVectorIndex attaches the vector index for embedding indexing.
+func (s *Server) SetVectorIndex(vi *vectorindex.VectorIndex) {
+	s.vecIndex = vi
 }
 
 func (s *Server) Start() error {

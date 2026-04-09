@@ -12,10 +12,11 @@ import (
 )
 
 type AddMemoryRequest struct {
-	Content  string            `json:"content"`
-	Type     string            `json:"type,omitempty"`
-	Links    []string          `json:"links,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	Content   string            `json:"content"`
+	Type      string            `json:"type,omitempty"`
+	Links     []string          `json:"links,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	Embedding []float32         `json:"embedding,omitempty"`
 }
 
 type AddMemoryResponse struct {
@@ -24,18 +25,20 @@ type AddMemoryResponse struct {
 	Type      string `json:"type"`
 }
 
-type QueryResult struct {
-	ID        string            `json:"id"`
-	Content   string            `json:"content"`
-	Type      string            `json:"type"`
-	Timestamp int64             `json:"timestamp"`
-	Links     []string          `json:"links"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
+type QueryResultAPI struct {
+	ID         string            `json:"id"`
+	Content    string            `json:"content"`
+	Type       string            `json:"type"`
+	Score      float64           `json:"score"`
+	Timestamp  int64             `json:"timestamp"`
+	Links      []string          `json:"links"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+	SourcePeer string            `json:"source_peer,omitempty"`
 }
 
 type QueryResponse struct {
-	Results []QueryResult `json:"results"`
-	Count   int           `json:"count"`
+	Results []QueryResultAPI `json:"results"`
+	Count   int              `json:"count"`
 }
 
 type StatusResponse struct {
@@ -108,6 +111,16 @@ func (s *Server) HandleAddMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set embedding if provided by caller
+	if len(req.Embedding) > 0 {
+		mem.Embedding = req.Embedding
+	}
+
+	// Index embedding in vector index if available
+	if s.vecIndex != nil && len(mem.Embedding) > 0 {
+		s.vecIndex.Add(mem.ID, mem.Embedding)
+	}
+
 	if err := s.store.SaveMemory(mem); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("failed to save memory: %v", err)})
 		return
@@ -128,6 +141,7 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 
 	queryText := r.URL.Query().Get("q")
 	limitStr := r.URL.Query().Get("limit")
+	embeddingStr := r.URL.Query().Get("embedding")
 	limit := 10
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
@@ -135,6 +149,44 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse optional embedding parameter
+	var embedding []float32
+	if embeddingStr != "" {
+		if err := json.Unmarshal([]byte(embeddingStr), &embedding); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid embedding JSON"})
+			return
+		}
+	}
+
+	// Use query engine if available
+	if s.queryEngine != nil && (queryText != "" || len(embedding) > 0) {
+		qReq := s.queryEngine.BuildRequest(queryText, embedding, limit)
+		results, err := s.queryEngine.SearchLocal(qReq)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("query failed: %v", err)})
+			return
+		}
+
+		apiResults := make([]QueryResultAPI, 0, len(results))
+		for _, r := range results {
+			apiResults = append(apiResults, QueryResultAPI{
+				ID:         r.MemoryID,
+				Content:    r.Snippet,
+				Type:       r.Type,
+				Score:      r.Score,
+				Timestamp:  r.Timestamp,
+				SourcePeer: r.SourcePeer,
+			})
+		}
+
+		writeJSON(w, http.StatusOK, QueryResponse{
+			Results: apiResults,
+			Count:   len(apiResults),
+		})
+		return
+	}
+
+	// Fallback: original search logic
 	decryptFn := func(ciphertext []byte) ([]byte, error) {
 		return s.cryptoEng.Decrypt(ciphertext)
 	}
@@ -153,26 +205,24 @@ func (s *Server) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results := make([]QueryResult, 0, len(memories))
+	apiResults := make([]QueryResultAPI, 0, len(memories))
 	for _, mem := range memories {
 		plain, err := mem.Decrypt(decryptFn)
 		if err != nil {
 			continue
 		}
 
-		results = append(results, QueryResult{
+		apiResults = append(apiResults, QueryResultAPI{
 			ID:        mem.ID,
 			Content:   plain.Content,
 			Type:      string(mem.Type),
 			Timestamp: mem.Timestamp,
-			Links:     mem.Links,
-			Metadata:  mem.Metadata,
 		})
 	}
 
 	writeJSON(w, http.StatusOK, QueryResponse{
-		Results: results,
-		Count:   len(results),
+		Results: apiResults,
+		Count:   len(apiResults),
 	})
 }
 
