@@ -1,6 +1,14 @@
 # Distributed Memory Graph Network (DMGN)
 
+[![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Alpha-orange)](README.md#project-status)
+
 A decentralized, encrypted, lifetime memory layer for AI agents. DMGN enables AI agents to store, retrieve, and synchronize memories across devices without relying on central servers.
+
+## Core Value
+
+User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
 ## Core Principles
 
@@ -26,6 +34,20 @@ A decentralized, encrypted, lifetime memory layer for AI agents. DMGN enables AI
 │  Identity (ed25519) │  Sync │  Shard Distribution            │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [CLI Commands](#cli-commands)
+- [Architecture](#architecture)
+- [Memory Model](#memory-model)
+- [Security](#security)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Project Status
 
@@ -253,16 +275,64 @@ go test ./...
 - Comprehensive documentation
 - Production readiness
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting and security policies.
+
+### Reporting Security Issues
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. Do NOT open a public issue
+2. Email security reports privately
+3. Include reproduction steps and potential impact
+4. Wait for acknowledgment before public disclosure
+
+## Community
+
+### Discussion
+
+Join the conversation:
+
+- [GitHub Discussions](https://github.com/dmgn/dmgn/discussions) - Q&A and ideas
+- [Discord](https://discord.gg/dmgn) - Real-time chat
+
+### Staying Updated
+
+- Watch the repository for release notifications
+- Check [CHANGELOG.md](CHANGELOG.md) for version history
+
 ## License
 
-MIT License - See [LICENSE](LICENSE) file.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Setting up your development environment
+- Submitting pull requests
+- Code style and commit conventions
+- Recognizing contributors
+
+### Contributors
+
+Thanks to all contributors who have helped build DMGN:
+
+<!-- CONTRIBUTORS:START -->
+| Contributor | Contribution |
+|------------|--------------|
+| [@dmgn](https://github.com/dmgn) | Original author |
+<!-- CONTRIBUTORS:END -->
+
+_(This section is updated for each release. Thank you for your contributions!)_
 
 ## Acknowledgments
 
-- libp2p for peer-to-peer networking
-- BadgerDB for fast LSM storage
-- Argon2 and AES-GCM for security
+Special thanks to the following projects and communities:
+
+- **[libp2p](https://libp2p.io/)** - Peer-to-peer networking foundation
+- **[BadgerDB](https://github.com/dgraph-io/badger)** - Fast LSM storage
+- **[Argon2](https://github.com/P-H-C/phc-winner-argon2)** - Memory-hard key derivation
+- **[Go Crypto](https://pkg.go.dev/golang.org/x/crypto)** - Cryptographic primitives
+- **[IPFS](https://ipfs.io/)** - Distributed storage concepts

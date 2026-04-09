@@ -59,6 +59,12 @@ Completed Plans:
 
 None.
 
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260409-g3l | Update the README like a pro - it should be a proper README with stuffs like the contributor info, add CONTRIBUTING.md, add the license | 2026-04-09 |  | [260409-g3l-update-the-readme-like-a-pro-it-should-b](./quick/260409-g3l-update-the-readme-like-a-pro-it-should-b/) |
+
 ## Recent Changes
 
 - 2026-04-09: Phase 3 complete — 2 plans executed, 36 tests passing (5 network + 3 integration)

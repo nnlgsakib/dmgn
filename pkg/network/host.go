@@ -146,3 +146,8 @@ func (h *Host) Addrs() []multiaddr.Multiaddr {
 func (h *Host) LibP2PHost() host.Host {
 	return h.host
 }
+
+// DHT returns the Kademlia DHT instance for provider operations.
+func (h *Host) DHT() *dht.IpfsDHT {
+	return h.dht
+}
