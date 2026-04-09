@@ -1,13 +1,15 @@
 package cli
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/pkg/identity"
 )
@@ -52,9 +54,29 @@ func ImportCmd() *cobra.Command {
 				start := strings.Index(keyStr, "-----BEGIN DMGN IDENTITY-----")
 				end := strings.Index(keyStr, "-----END DMGN IDENTITY-----")
 				if start != -1 && end != -1 {
-					keyStr = keyStr[start+len("-----BEGIN DMGN IDENTITY-----") : end]
-					keyData = []byte(strings.TrimSpace(keyStr))
+					body := keyStr[start+len("-----BEGIN DMGN IDENTITY-----") : end]
+					body = strings.TrimSpace(body)
+					decoded, err := base64.StdEncoding.DecodeString(body)
+					if err != nil {
+						return fmt.Errorf("failed to decode armored identity: %w", err)
+					}
+					keyData = decoded
 				}
+			}
+
+			// Validate key file has expected fields
+			var keyCheck struct {
+				Version    int    `json:"version"`
+				PublicKey  string `json:"public_key"`
+				Salt       []byte `json:"salt"`
+				Nonce      []byte `json:"nonce"`
+				Ciphertext []byte `json:"ciphertext"`
+			}
+			if err := json.Unmarshal(keyData, &keyCheck); err != nil {
+				return fmt.Errorf("invalid key file format: %w", err)
+			}
+			if keyCheck.PublicKey == "" || keyCheck.Salt == nil || keyCheck.Nonce == nil || keyCheck.Ciphertext == nil {
+				return fmt.Errorf("invalid key file: missing required fields")
 			}
 
 			if err := identity.Import(keyData, cfg.IdentityDir()); err != nil {
@@ -65,7 +87,8 @@ func ImportCmd() *cobra.Command {
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
-			fmt.Println("✓ Identity imported successfully!")
+			fmt.Println("\u2713 Identity imported successfully!")
+			fmt.Printf("  Node ID: %s\n", keyCheck.PublicKey)
 			fmt.Printf("  Data directory: %s\n", cfg.DataDir)
 			fmt.Println()
 			fmt.Println("You can now use this node with your existing identity.")

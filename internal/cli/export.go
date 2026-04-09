@@ -1,11 +1,12 @@
 package cli
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	
+
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/pkg/identity"
 )
@@ -38,7 +39,8 @@ func ExportCmd() *cobra.Command {
 
 			output := keyData
 			if armored {
-				output = []byte(fmt.Sprintf("-----BEGIN DMGN IDENTITY-----\n%s\n-----END DMGN IDENTITY-----\n", keyData))
+				encoded := base64.StdEncoding.EncodeToString(keyData)
+				output = []byte(fmt.Sprintf("-----BEGIN DMGN IDENTITY-----\n%s\n-----END DMGN IDENTITY-----\n", encoded))
 			}
 
 			if outFile == "" {
