@@ -20,7 +20,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** Phase 06 — MCP & Polish
+**Current focus:** Phase 06 — MCP & Polish (context gathered, ready for planning)
 
 ## Phase Progress
 
@@ -72,6 +72,7 @@ None.
 
 ## Recent Changes
 
+- 2026-04-09: Phase 6 context gathered — MCP, OTel, docs, backup, peer reputation
 - 2026-04-09: Phase 5 complete — 3 plans executed, all tests passing (8 vectorindex + 16 sync + 6 query)
 - 2026-04-09: Phase 4 complete — 3 plans executed
 - 2026-04-09: Phase 3 complete — 2 plans executed, 36 tests passing (5 network + 3 integration)
@@ -81,4 +82,4 @@ None.
 - 2025-04-09: Project initialized with PROJECT.md, REQUIREMENTS.md, ROADMAP.md
 
 ---
-*State updated: 2026-04-09 after Phase 5 (Query & Sync) execution*
+*State updated: 2026-04-09 after Phase 6 context gathering*
