@@ -144,20 +144,26 @@ func (s *Store) GetMemoriesByTime(start, end int64, limit int) ([]*memory.Memory
 
 	err := s.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = false
-		opts.Reverse = true
+		opts.PrefetchValues = true
 
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		startKey := makeTimeKey(end, "")
-		endKey := makeTimeKey(start, "\xff")
+		// With inverted timestamps (^timestamp): newest = smallest key, oldest = largest key.
+		// Forward iteration gives newest-first ordering.
+		seekKey := makeTimeKey(end, "")
+		boundKey := makeTimeKey(start, "\xff")
 
-		for it.Seek(startKey); it.Valid() && count < limit; it.Next() {
+		prefix := []byte(PrefixTimeIndex)
+		for it.Seek(seekKey); it.Valid() && count < limit; it.Next() {
 			item := it.Item()
 			key := item.Key()
 
-			if string(key) > string(endKey) {
+			if !hasPrefix(key, prefix) {
+				break
+			}
+
+			if string(key) > string(boundKey) {
 				break
 			}
 
@@ -186,6 +192,18 @@ func (s *Store) GetMemoriesByTime(start, end int64, limit int) ([]*memory.Memory
 	}
 
 	return memories, nil
+}
+
+func hasPrefix(key, prefix []byte) bool {
+	if len(key) < len(prefix) {
+		return false
+	}
+	for i := range prefix {
+		if key[i] != prefix[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Store) GetRecentMemories(limit int) ([]*memory.Memory, error) {
