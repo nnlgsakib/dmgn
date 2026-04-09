@@ -2,7 +2,7 @@ package sync
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"time"
@@ -13,24 +13,15 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/nnlgsakib/dmgn/pkg/memory"
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
 	"github.com/nnlgsakib/dmgn/pkg/storage"
+	"google.golang.org/protobuf/proto"
 )
 
 // SyncProtocol is the protocol ID for delta sync.
-const SyncProtocol = protocol.ID("/dmgn/memory/sync/1.0.0")
+const SyncProtocol = protocol.ID("/dmgn/memory/sync/2.0.0")
 
-// syncRequest is sent by the initiator to begin delta sync.
-type syncRequest struct {
-	SenderPeerID  string            `json:"sender_peer_id"`
-	VersionVector map[string]uint64 `json:"version_vector"`
-}
-
-// syncResponse is sent by the responder with missing memories + their version vector.
-type syncResponse struct {
-	SenderPeerID  string            `json:"sender_peer_id"`
-	VersionVector map[string]uint64 `json:"version_vector"`
-	Memories      []json.RawMessage `json:"memories"`
-}
+const maxSyncMsgLen = 16 * 1024 * 1024 // 16 MB
 
 // DeltaSyncManager handles version-vector-based reconnection sync.
 type DeltaSyncManager struct {
@@ -61,7 +52,7 @@ func NewDeltaSyncManager(host libp2p_host.Host, vv *VersionVector, vvStore *VClo
 	}
 }
 
-// RegisterHandler registers the /dmgn/memory/sync/1.0.0 stream handler.
+// RegisterHandler registers the /dmgn/memory/sync/2.0.0 stream handler.
 func (dm *DeltaSyncManager) RegisterHandler() {
 	dm.host.SetStreamHandler(SyncProtocol, dm.handleStream)
 }
@@ -71,9 +62,8 @@ func (dm *DeltaSyncManager) handleStream(s network.Stream) {
 	defer s.Close()
 
 	// Read the sync request
-	var req syncRequest
-	decoder := json.NewDecoder(s)
-	if err := decoder.Decode(&req); err != nil {
+	req := &dmgnpb.SyncRequest{}
+	if err := readSyncMsg(s, req); err != nil {
 		return
 	}
 
@@ -88,18 +78,17 @@ func (dm *DeltaSyncManager) handleStream(s network.Stream) {
 	memories := dm.collectMissingMemories(theirMissing)
 
 	// Send response with our version vector + missing memories
-	resp := syncResponse{
-		SenderPeerID:  dm.localPeerID,
+	resp := &dmgnpb.SyncResponse{
+		SenderPeerId:  dm.localPeerID,
 		VersionVector: dm.vv.Entries(),
 		Memories:      memories,
 	}
 
-	encoder := json.NewEncoder(s)
-	encoder.Encode(resp)
+	writeSyncMsg(s, resp)
 
 	// Read their follow-up (memories they have that we're missing)
-	var followUp syncResponse
-	if err := decoder.Decode(&followUp); err != nil && err != io.EOF {
+	followUp := &dmgnpb.SyncResponse{}
+	if err := readSyncMsg(s, followUp); err != nil {
 		return
 	}
 
@@ -115,20 +104,18 @@ func (dm *DeltaSyncManager) SyncWithPeer(ctx context.Context, peerID peer.ID) er
 	defer s.Close()
 
 	// Send our version vector
-	req := syncRequest{
-		SenderPeerID:  dm.localPeerID,
+	req := &dmgnpb.SyncRequest{
+		SenderPeerId:  dm.localPeerID,
 		VersionVector: dm.vv.Entries(),
 	}
 
-	encoder := json.NewEncoder(s)
-	if err := encoder.Encode(req); err != nil {
+	if err := writeSyncMsg(s, req); err != nil {
 		return fmt.Errorf("send sync request: %w", err)
 	}
 
 	// Read response
-	var resp syncResponse
-	decoder := json.NewDecoder(s)
-	if err := decoder.Decode(&resp); err != nil {
+	resp := &dmgnpb.SyncResponse{}
+	if err := readSyncMsg(s, resp); err != nil {
 		return fmt.Errorf("read sync response: %w", err)
 	}
 
@@ -144,12 +131,12 @@ func (dm *DeltaSyncManager) SyncWithPeer(ctx context.Context, peerID peer.ID) er
 	memories := dm.collectMissingMemories(theirMissing)
 
 	// Send follow-up with what they're missing
-	followUp := syncResponse{
-		SenderPeerID:  dm.localPeerID,
+	followUp := &dmgnpb.SyncResponse{
+		SenderPeerId:  dm.localPeerID,
 		VersionVector: dm.vv.Entries(),
 		Memories:      memories,
 	}
-	if err := encoder.Encode(followUp); err != nil {
+	if err := writeSyncMsg(s, followUp); err != nil {
 		return fmt.Errorf("send follow-up: %w", err)
 	}
 
@@ -200,8 +187,8 @@ func (dm *DeltaSyncManager) syncAllPeers(ctx context.Context) {
 }
 
 // collectMissingMemories gathers memories the remote peer is missing.
-func (dm *DeltaSyncManager) collectMissingMemories(missing map[string]uint64) []json.RawMessage {
-	var memories []json.RawMessage
+func (dm *DeltaSyncManager) collectMissingMemories(missing map[string]uint64) [][]byte {
+	var memories [][]byte
 
 	for peerID, afterSeq := range missing {
 		memIDs, err := dm.vvStore.GetMemoriesAfter(peerID, afterSeq)
@@ -213,11 +200,11 @@ func (dm *DeltaSyncManager) collectMissingMemories(missing map[string]uint64) []
 			if err != nil {
 				continue
 			}
-			data, err := json.Marshal(mem)
+			data, err := proto.Marshal(mem.ToProto())
 			if err != nil {
 				continue
 			}
-			memories = append(memories, json.RawMessage(data))
+			memories = append(memories, data)
 		}
 	}
 
@@ -225,14 +212,52 @@ func (dm *DeltaSyncManager) collectMissingMemories(missing map[string]uint64) []
 }
 
 // processReceivedMemories stores and indexes received memories.
-func (dm *DeltaSyncManager) processReceivedMemories(memories []json.RawMessage) {
+func (dm *DeltaSyncManager) processReceivedMemories(memories [][]byte) {
 	for _, raw := range memories {
-		var mem memory.Memory
-		if err := json.Unmarshal(raw, &mem); err != nil {
+		pb := &dmgnpb.Memory{}
+		if err := proto.Unmarshal(raw, pb); err != nil {
 			continue
 		}
+		mem := memory.MemoryFromProto(pb)
 		if dm.onReceive != nil {
-			dm.onReceive(&mem)
+			dm.onReceive(mem)
 		}
 	}
+}
+
+// writeSyncMsg writes a length-prefixed protobuf message to a stream.
+func writeSyncMsg(w io.Writer, msg proto.Message) error {
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal sync message: %w", err)
+	}
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
+	if _, err := w.Write(lenBuf); err != nil {
+		return fmt.Errorf("write sync length: %w", err)
+	}
+	if _, err := w.Write(data); err != nil {
+		return fmt.Errorf("write sync message: %w", err)
+	}
+	return nil
+}
+
+// readSyncMsg reads a length-prefixed protobuf message from a stream.
+func readSyncMsg(r io.Reader, msg proto.Message) error {
+	lenBuf := make([]byte, 4)
+	if _, err := io.ReadFull(r, lenBuf); err != nil {
+		return fmt.Errorf("read sync length: %w", err)
+	}
+	msgLen := binary.BigEndian.Uint32(lenBuf)
+	if msgLen > maxSyncMsgLen {
+		return fmt.Errorf("sync message too large: %d bytes", msgLen)
+	}
+	data := make([]byte, msgLen)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return fmt.Errorf("read sync message: %w", err)
+	}
+	if err := proto.Unmarshal(data, msg); err != nil {
+		return fmt.Errorf("unmarshal sync message: %w", err)
+	}
+	return nil
 }

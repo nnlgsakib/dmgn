@@ -1,31 +1,34 @@
 package sync
 
 import (
-	"encoding/json"
+	"bytes"
 	"testing"
+
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSyncRequestMarshal(t *testing.T) {
-	req := syncRequest{
-		SenderPeerID: "peer-A",
+	req := &dmgnpb.SyncRequest{
+		SenderPeerId: "peer-A",
 		VersionVector: map[string]uint64{
 			"peer-A": 10,
 			"peer-B": 5,
 		},
 	}
 
-	data, err := json.Marshal(req)
+	data, err := proto.Marshal(req)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
 
-	var decoded syncRequest
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	decoded := &dmgnpb.SyncRequest{}
+	if err := proto.Unmarshal(data, decoded); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 
-	if decoded.SenderPeerID != "peer-A" {
-		t.Errorf("expected peer-A, got %s", decoded.SenderPeerID)
+	if decoded.SenderPeerId != "peer-A" {
+		t.Errorf("expected peer-A, got %s", decoded.SenderPeerId)
 	}
 	if decoded.VersionVector["peer-A"] != 10 {
 		t.Errorf("expected peer-A=10, got %d", decoded.VersionVector["peer-A"])
@@ -33,30 +36,56 @@ func TestSyncRequestMarshal(t *testing.T) {
 }
 
 func TestSyncResponseMarshal(t *testing.T) {
-	resp := syncResponse{
-		SenderPeerID: "peer-B",
+	resp := &dmgnpb.SyncResponse{
+		SenderPeerId: "peer-B",
 		VersionVector: map[string]uint64{
 			"peer-A": 10,
 			"peer-B": 20,
 		},
-		Memories: []json.RawMessage{
-			json.RawMessage(`{"id":"mem-001"}`),
-			json.RawMessage(`{"id":"mem-002"}`),
+		Memories: [][]byte{
+			[]byte("mem-001-proto-bytes"),
+			[]byte("mem-002-proto-bytes"),
 		},
 	}
 
-	data, err := json.Marshal(resp)
+	data, err := proto.Marshal(resp)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
 
-	var decoded syncResponse
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	decoded := &dmgnpb.SyncResponse{}
+	if err := proto.Unmarshal(data, decoded); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
 
 	if len(decoded.Memories) != 2 {
 		t.Errorf("expected 2 memories, got %d", len(decoded.Memories))
+	}
+}
+
+func TestSyncMsgFrameRoundtrip(t *testing.T) {
+	req := &dmgnpb.SyncRequest{
+		SenderPeerId: "peer-frame-test",
+		VersionVector: map[string]uint64{
+			"peer-A": 100,
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := writeSyncMsg(&buf, req); err != nil {
+		t.Fatalf("writeSyncMsg: %v", err)
+	}
+
+	decoded := &dmgnpb.SyncRequest{}
+	if err := readSyncMsg(&buf, decoded); err != nil {
+		t.Fatalf("readSyncMsg: %v", err)
+	}
+
+	if decoded.SenderPeerId != "peer-frame-test" {
+		t.Errorf("SenderPeerId: got %q, want %q", decoded.SenderPeerId, "peer-frame-test")
+	}
+	if decoded.VersionVector["peer-A"] != 100 {
+		t.Errorf("VersionVector[peer-A]: got %d, want 100", decoded.VersionVector["peer-A"])
 	}
 }
 

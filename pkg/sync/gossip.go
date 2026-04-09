@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,16 +9,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
+	"google.golang.org/protobuf/proto"
 )
-
-// GossipMessage is the envelope for gossip broadcasts.
-type GossipMessage struct {
-	Type         string `json:"type"`
-	Memory       []byte `json:"memory"`
-	SenderPeerID string `json:"sender_peer_id"`
-	Timestamp    int64  `json:"timestamp"`
-	Sequence     uint64 `json:"sequence"`
-}
 
 // GossipManager handles pubsub memory propagation.
 type GossipManager struct {
@@ -28,14 +20,14 @@ type GossipManager struct {
 	sub         *pubsub.Subscription
 	topicName   string
 	localPeerID peer.ID
-	onReceive   func(msg *GossipMessage)
+	onReceive   func(msg *dmgnpb.GossipMessage)
 	cancel      context.CancelFunc
 	done        chan struct{}
 }
 
 // NewGossipManager creates a GossipSub manager for a libp2p host.
 func NewGossipManager(ctx context.Context, host libp2p_host.Host, topicName string,
-	onReceive func(msg *GossipMessage)) (*GossipManager, error) {
+	onReceive func(msg *dmgnpb.GossipMessage)) (*GossipManager, error) {
 
 	ps, err := pubsub.NewGossipSub(ctx, host)
 	if err != nil {
@@ -65,16 +57,16 @@ func NewGossipManager(ctx context.Context, host libp2p_host.Host, topicName stri
 }
 
 // Publish broadcasts a new memory to the gossip network.
-func (gm *GossipManager) Publish(ctx context.Context, memoryJSON []byte, seq uint64) error {
-	msg := GossipMessage{
+func (gm *GossipManager) Publish(ctx context.Context, memoryBytes []byte, seq uint64) error {
+	msg := &dmgnpb.GossipMessage{
 		Type:         "new_memory",
-		Memory:       memoryJSON,
-		SenderPeerID: gm.localPeerID.String(),
+		Memory:       memoryBytes,
+		SenderPeerId: gm.localPeerID.String(),
 		Timestamp:    time.Now().UnixNano(),
 		Sequence:     seq,
 	}
 
-	data, err := json.Marshal(msg)
+	data, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal gossip message: %w", err)
 	}
@@ -101,8 +93,8 @@ func (gm *GossipManager) Start(ctx context.Context) {
 				continue
 			}
 
-			var gossipMsg GossipMessage
-			if err := json.Unmarshal(msg.Data, &gossipMsg); err != nil {
+			var gossipMsg dmgnpb.GossipMessage
+			if err := proto.Unmarshal(msg.Data, &gossipMsg); err != nil {
 				continue // skip malformed messages
 			}
 

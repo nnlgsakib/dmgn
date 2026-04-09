@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,6 +21,8 @@ import (
 	"github.com/nnlgsakib/dmgn/pkg/storage"
 	pkgsync "github.com/nnlgsakib/dmgn/pkg/sync"
 	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 func StartCmd() *cobra.Command {
@@ -203,16 +204,17 @@ func StartCmd() *cobra.Command {
 				defer nodeCancel()
 
 				gossipMgr, err := pkgsync.NewGossipManager(nodeCtx, h.LibP2PHost(), cfg.GossipTopic,
-					func(msg *pkgsync.GossipMessage) {
-						var mem memory.Memory
-						if err := json.Unmarshal(msg.Memory, &mem); err != nil {
+					func(msg *dmgnpb.GossipMessage) {
+						pb := &dmgnpb.Memory{}
+						if err := proto.Unmarshal(msg.Memory, pb); err != nil {
 							return
 						}
-						onMemoryReceived(&mem)
+						mem := memory.MemoryFromProto(pb)
+						onMemoryReceived(mem)
 						// Update version vector from gossip
-						if msg.Sequence > vv.Get(msg.SenderPeerID) {
-							vv.Set(msg.SenderPeerID, msg.Sequence)
-							vvStore.SaveSequence(msg.SenderPeerID, msg.Sequence, mem.ID)
+						if msg.Sequence > vv.Get(msg.SenderPeerId) {
+							vv.Set(msg.SenderPeerId, msg.Sequence)
+							vvStore.SaveSequence(msg.SenderPeerId, msg.Sequence, mem.ID)
 							vvStore.Save(h.ID().String(), vv)
 						}
 					})
