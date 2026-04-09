@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 const (
@@ -26,6 +27,11 @@ type Config struct {
 	MaxPeersHigh      int      `json:"max_peers_high"`
 	ShardThreshold    int      `json:"shard_threshold"`
 	ShardCount        int      `json:"shard_count"`
+	EmbeddingDim      int      `json:"embedding_dim"`
+	HybridScoreAlpha  float64  `json:"hybrid_score_alpha"`
+	QueryTimeout      string   `json:"query_timeout"`
+	SyncInterval      string   `json:"sync_interval"`
+	GossipTopic       string   `json:"gossip_topic"`
 }
 
 func DefaultConfig() *Config {
@@ -42,6 +48,11 @@ func DefaultConfig() *Config {
 		MaxPeersHigh:      25,
 		ShardThreshold:    3,
 		ShardCount:        5,
+		EmbeddingDim:      0,
+		HybridScoreAlpha:  0.7,
+		QueryTimeout:      "2s",
+		SyncInterval:      "60s",
+		GossipTopic:       "dmgn/memories/1.0.0",
 	}
 }
 
@@ -115,6 +126,26 @@ func (c *Config) StorageDir() string {
 
 func (c *Config) BackupDir() string {
 	return filepath.Join(c.DataDir, "backups")
+}
+
+func (c *Config) VectorIndexPath() string {
+	return filepath.Join(c.DataDir, "vector-index.enc")
+}
+
+func (c *Config) QueryTimeoutDuration() time.Duration {
+	d, err := time.ParseDuration(c.QueryTimeout)
+	if err != nil {
+		return 2 * time.Second
+	}
+	return d
+}
+
+func (c *Config) SyncIntervalDuration() time.Duration {
+	d, err := time.ParseDuration(c.SyncInterval)
+	if err != nil {
+		return 60 * time.Second
+	}
+	return d
 }
 
 func (c *Config) EnsureDirs() error {
