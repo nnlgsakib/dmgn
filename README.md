@@ -53,12 +53,12 @@ User owns their identity and memory data that persists across devices and time, 
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 | ✅ Local Foundation | Identity, storage, CLI, local memory |
-| 2 | ⏳ Encryption & API | Full E2E encryption, REST API |
-| 3 | ⏳ Networking Core | libp2p peer discovery |
-| 4 | ⏳ Distributed Storage | Sharding, replication factor 3+ |
-| 5 | ⏳ Query & Sync | Vector search, gossip sync |
-| 6 | ⏳ MCP & Polish | MCP protocol, docs, production ready |
+| 1 | ✅ Complete | Local Foundation — Identity, storage, CLI, local memory |
+| 2 | ✅ Complete | Encryption & API — Full E2E encryption, REST API |
+| 3 | ✅ Complete | Networking Core — libp2p peer discovery, mDNS, DHT |
+| 4 | ✅ Complete | Distributed Storage — Shamir sharding, replication |
+| 5 | ✅ Complete | Query & Sync — Vector search, gossip sync, delta sync |
+| 6 | ✅ Complete | MCP & Polish — MCP protocol, observability, backup, docs |
 
 ## Installation
 
@@ -136,9 +136,15 @@ Found 1 memories:
 | `dmgn query <text>` | Search memories by content |
 | `dmgn query --recent` | List recent memories |
 | `dmgn status` | Show node status and stats |
-| `dmgn start` | Start the daemon (Phase 3+) |
+| `dmgn start` | Start the daemon with networking and API |
+| `dmgn mcp-serve` | Start MCP server on stdio (for AI agents) |
+| `dmgn backup` | Export encrypted backup of node data |
+| `dmgn restore` | Restore node from encrypted backup |
 | `dmgn export` | Export encrypted identity for backup |
 | `dmgn import` | Import identity from backup |
+| `dmgn peers` | Show connected peers |
+
+See [docs/cli-reference.md](docs/cli-reference.md) for complete usage.
 
 ## Memory Model
 
@@ -214,13 +220,24 @@ Override with `--data-dir` flag.
 ### Project Structure
 
 ```
-cmd/dmgn/          # CLI entry point
-pkg/identity/      # ed25519 key management
-pkg/memory/        # Memory model and graph
-pkg/storage/       # BadgerDB interface
-internal/cli/      # Cobra commands
-internal/crypto/   # AES-GCM encryption
-internal/config/   # Configuration management
+cmd/dmgn/              # CLI entry point
+pkg/identity/          # ed25519 key management
+pkg/memory/            # Memory model and graph
+pkg/storage/           # BadgerDB interface
+pkg/vectorindex/       # Vector similarity search
+pkg/query/             # Hybrid query engine + cross-peer protocol
+pkg/sync/              # GossipSub + delta sync + version vectors
+pkg/network/           # libp2p host, peer discovery, reputation
+pkg/sharding/          # Shamir secret sharing
+pkg/mcp/               # MCP server for AI agent integration
+pkg/backup/            # Encrypted backup/restore
+pkg/observability/     # OpenTelemetry, structured logging
+internal/cli/          # Cobra commands
+internal/crypto/       # AES-GCM encryption
+internal/config/       # Configuration management
+internal/api/          # REST API server
+docs/                  # Architecture, MCP, API, CLI, config docs
+examples/              # Claude Desktop, Cline config examples
 ```
 
 ### Running Tests
@@ -237,6 +254,34 @@ go test ./...
 - [x] Data persists across CLI restarts
 - [x] Time-based queries return memories in chronological order
 
+## AI Agent Integration (MCP)
+
+DMGN works as an MCP server — Claude Desktop, Cline, and other AI agents can use it as persistent memory.
+
+```bash
+# Build and initialize
+go build -o dmgn ./cmd/dmgn
+./dmgn init
+
+# Add to Claude Desktop config
+# See examples/claude_desktop_config.json
+```
+
+**7 MCP tools:** `add_memory`, `query_memory`, `get_context`, `link_memories`, `get_graph`, `delete_memory`, `get_status`
+
+See [docs/mcp-integration.md](docs/mcp-integration.md) for full setup guide.
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System overview, component diagram, data flow |
+| [MCP Integration](docs/mcp-integration.md) | Claude Desktop, Cline setup guides |
+| [API Reference](docs/api-reference.md) | REST API with curl examples |
+| [CLI Reference](docs/cli-reference.md) | All commands with usage |
+| [Config Reference](docs/config-reference.md) | All config fields with defaults |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and fixes |
+
 ## Roadmap
 
 ### Phase 1: Local Foundation ✅
@@ -245,35 +290,36 @@ go test ./...
 - CLI commands (init, add, query, status)
 - Memory graph with links
 
-### Phase 2: Encryption & API
+### Phase 2: Encryption & API ✅
 - Full AES-GCM-256 encryption for all data
-- REST API with authentication
+- REST API with Bearer token authentication
 - Memory backup and import/export
-- Local query with basic search
+- Key hierarchy with per-memory keys
 
-### Phase 3: Networking Core
-- libp2p host initialization
+### Phase 3: Networking Core ✅
+- libp2p host with TCP and QUIC transports
 - DHT and mDNS peer discovery
-- TCP and QUIC transports
+- Connection management with watermarks
 - Basic protocol handlers
 
-### Phase 4: Distributed Storage
-- Memory sharding algorithm
-- Encrypted shard distribution
+### Phase 4: Distributed Storage ✅
+- Shamir secret sharing for memory shards
+- Encrypted shard distribution to peers
 - Replication factor management
 - `/memory/store/1.0.0` and `/memory/fetch/1.0.0` protocols
 
-### Phase 5: Query & Sync
-- Embedding generation (OpenAI/local)
-- Vector similarity search (HNSW)
-- Cross-peer query aggregation
-- Gossip-based memory sync
+### Phase 5: Query & Sync ✅
+- Brute-force cosine vector similarity search
+- Hybrid scoring (vector + text)
+- Cross-peer query aggregation via libp2p streams
+- GossipSub memory propagation + delta sync with version vectors
 
-### Phase 6: MCP & Polish
-- MCP stdio protocol implementation
-- `add_memory`, `query_memory`, `get_context` tools
-- Comprehensive documentation
-- Production readiness
+### Phase 6: MCP & Polish ✅
+- MCP stdio server with 7 tools (official Go SDK)
+- OpenTelemetry traces/metrics + structured logging with rotation
+- Encrypted backup/restore (tar.gz with manifest)
+- Peer reputation scoring (weighted: uptime, latency, sync, availability)
+- Comprehensive documentation suite
 
 ## Security
 
@@ -336,3 +382,5 @@ Special thanks to the following projects and communities:
 - **[Argon2](https://github.com/P-H-C/phc-winner-argon2)** - Memory-hard key derivation
 - **[Go Crypto](https://pkg.go.dev/golang.org/x/crypto)** - Cryptographic primitives
 - **[IPFS](https://ipfs.io/)** - Distributed storage concepts
+- **[MCP](https://modelcontextprotocol.io/)** - Model Context Protocol for AI agent integration
+- **[OpenTelemetry](https://opentelemetry.io/)** - Observability framework

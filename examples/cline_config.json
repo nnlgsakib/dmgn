@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "dmgn": {
+      "command": "dmgn",
+      "args": ["mcp-serve", "--data-dir", "~/.dmgn"],
+      "disabled": false
+    }
+  }
+}
