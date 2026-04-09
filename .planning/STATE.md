@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 06
-last_updated: "2026-04-09T10:18:24.711Z"
+status: All Phases Complete
+last_updated: "2026-04-09T10:30:00.000Z"
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_phases: 6
+  total_plans: 19
+  completed_plans: 19
+  percent: 100
 ---
 
 # State: DMGN
@@ -20,7 +20,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** Phase 06 — MCP & Polish
+**Current focus:** All phases complete — production ready
 
 ## Phase Progress
 
@@ -31,17 +31,18 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 | 3: Networking Core | **Complete** | libp2p host, DHT, mDNS, peers CLI, live status |
 | 4: Distributed Storage | **Complete** | Shamir sharding, DHT-based distribution, store/fetch protocols |
 | 5: Query & Sync | **Complete** | Vector index, hybrid scoring, GossipSub, delta sync, cross-peer query |
-| 6: MCP & Polish | Not Started | MCP protocol, docs |
+| 6: MCP & Polish | **Complete** | MCP server (7 tools), OTel, backup/restore, peer reputation, docs |
 
 ## Active Work
 
-Phase 5 complete. Ready for Phase 6 (MCP & Polish).
+All 6 phases complete. DMGN v1.0 ready.
 
-Phase 5 Completed Plans:
+Phase 6 Completed Plans:
 
-- 05-01 (Wave 1): ✓ Pure Go vector index with encrypted persistence, version vector, config extensions
-- 05-02 (Wave 2): ✓ Local query engine with hybrid scoring, GossipSub integration, delta sync protocol
-- 05-03 (Wave 3): ✓ Cross-peer query protocol, CLI/API embedding support, full startup wiring
+- 06-01 (Wave 1): ✓ MCP server core + 7 tools + mcp-serve CLI (10 tests)
+- 06-02 (Wave 2): ✓ OpenTelemetry traces/metrics + structured logging with rotation (6 tests)
+- 06-03 (Wave 3): ✓ Backup/restore + peer reputation scoring (12 tests)
+- 06-04 (Wave 4): ✓ Documentation suite (architecture, MCP, API, CLI, config, troubleshooting)
 
 ## Decisions Made
 
@@ -59,6 +60,9 @@ Phase 5 Completed Plans:
 12. **Caller-provided embeddings**: DMGN is a storage/index/sync layer, not a computation platform. AI agents provide pre-computed embeddings.
 13. **GossipSub with full encrypted memory**: Entire encrypted memory struct in gossip messages. Simple and no separate fetch needed.
 14. **Version vector delta sync**: On reconnect, peers exchange version vectors and send missing memories bidirectionally.
+15. **Official MCP Go SDK**: `modelcontextprotocol/go-sdk` for long-term stability over community alternatives.
+16. **Local-only MCP by default**: MCP server works offline-first, `--network` flag opts into P2P features.
+17. **Weighted reputation scoring**: `0.3*uptime + 0.3*latency + 0.2*sync + 0.2*availability` with exponential decay toward neutral.
 
 ## Blockers
 
@@ -72,6 +76,7 @@ None.
 
 ## Recent Changes
 
+- 2026-04-09: Phase 6 complete — 4 plans executed, 28 new tests, 13 test packages all passing
 - 2026-04-09: Phase 6 context gathered — MCP, OTel, docs, backup, peer reputation
 - 2026-04-09: Phase 5 complete — 3 plans executed, all tests passing (8 vectorindex + 16 sync + 6 query)
 - 2026-04-09: Phase 4 complete — 3 plans executed
@@ -82,4 +87,4 @@ None.
 - 2025-04-09: Project initialized with PROJECT.md, REQUIREMENTS.md, ROADMAP.md
 
 ---
-*State updated: 2026-04-09 after Phase 6 context gathering*
+*State updated: 2026-04-09 after Phase 6 execution complete*
