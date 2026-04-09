@@ -1,6 +1,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
 	"github.com/nnlgsakib/dmgn/pkg/sharding"
 )
 
@@ -172,5 +174,67 @@ func TestFetchNonexistentShard(t *testing.T) {
 	_, err := hostA.FetchShard(ctx, hostB.ID(), "nonexistent", 0)
 	if err == nil {
 		t.Error("expected error for nonexistent shard")
+	}
+}
+
+func TestProtoFrameRoundtrip(t *testing.T) {
+	original := &dmgnpb.StoreRequest{
+		MemoryId:    "mem-roundtrip-test",
+		ShardIndex:  3,
+		TotalShards: 7,
+		Threshold:   4,
+		Checksum:    "abcdef0123456789",
+		DataLen:     1024,
+	}
+
+	trailingData := []byte("trailing-shard-bytes")
+
+	// Write
+	var buf bytes.Buffer
+	if err := writeProtoFrame(&buf, original, trailingData); err != nil {
+		t.Fatalf("writeProtoFrame: %v", err)
+	}
+
+	// Read
+	decoded := &dmgnpb.StoreRequest{}
+	data, err := readProtoFrame(&buf, decoded, len(trailingData))
+	if err != nil {
+		t.Fatalf("readProtoFrame: %v", err)
+	}
+
+	if decoded.MemoryId != original.MemoryId {
+		t.Errorf("MemoryId: got %q, want %q", decoded.MemoryId, original.MemoryId)
+	}
+	if decoded.ShardIndex != original.ShardIndex {
+		t.Errorf("ShardIndex: got %d, want %d", decoded.ShardIndex, original.ShardIndex)
+	}
+	if decoded.TotalShards != original.TotalShards {
+		t.Errorf("TotalShards: got %d, want %d", decoded.TotalShards, original.TotalShards)
+	}
+	if decoded.DataLen != original.DataLen {
+		t.Errorf("DataLen: got %d, want %d", decoded.DataLen, original.DataLen)
+	}
+	if string(data) != string(trailingData) {
+		t.Errorf("trailing data: got %q, want %q", data, trailingData)
+	}
+}
+
+func BenchmarkProtoFrameStoreRequest(b *testing.B) {
+	req := &dmgnpb.StoreRequest{
+		MemoryId:    "mem-bench-001",
+		ShardIndex:  0,
+		TotalShards: 5,
+		Threshold:   3,
+		Checksum:    "cafebabe12345678cafebabe12345678cafebabe12345678cafebabe12345678",
+		DataLen:     65536,
+	}
+	data := make([]byte, 128)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		writeProtoFrame(&buf, req, data)
+		decoded := &dmgnpb.StoreRequest{}
+		readProtoFrame(&buf, decoded, len(data))
 	}
 }
