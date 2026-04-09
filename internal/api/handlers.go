@@ -52,8 +52,10 @@ type StorageStats struct {
 }
 
 type NetworkStats struct {
-	Status string `json:"status"`
-	Peers  int    `json:"peers"`
+	Status      string   `json:"status"`
+	Peers       int      `json:"peers"`
+	PeerID      string   `json:"peer_id,omitempty"`
+	ListenAddrs []string `json:"listen_addrs,omitempty"`
 }
 
 func (s *Server) HandleAddMemory(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +183,21 @@ func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	netStats := NetworkStats{
+		Status: "offline",
+		Peers:  0,
+	}
+	if s.networkHost != nil {
+		netStats.Status = "running"
+		netStats.Peers = s.networkHost.PeerCount()
+		netStats.PeerID = s.networkHost.ID().String()
+		addrs := s.networkHost.Addrs()
+		netStats.ListenAddrs = make([]string, 0, len(addrs))
+		for _, a := range addrs {
+			netStats.ListenAddrs = append(netStats.ListenAddrs, a.String())
+		}
+	}
+
 	writeJSON(w, http.StatusOK, StatusResponse{
 		NodeID:  s.identity.ID,
 		Version: s.config.Version,
@@ -189,10 +206,28 @@ func (s *Server) HandleStatus(w http.ResponseWriter, r *http.Request) {
 			EdgeCount:   stats["edge_count"],
 			Path:        s.store.Path(),
 		},
-		Network: NetworkStats{
-			Status: "offline",
-			Peers:  0,
-		},
+		Network: netStats,
+	})
+}
+
+func (s *Server) HandlePeers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	if s.networkHost == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"peers": []interface{}{},
+			"count": 0,
+		})
+		return
+	}
+
+	peers := s.networkHost.ConnectedPeers()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"peers": peers,
+		"count": len(peers),
 	})
 }
 

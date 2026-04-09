@@ -26,6 +26,7 @@ and resilient to node failure.`,
 	rootCmd.AddCommand(cli.StatusCmd())
 	rootCmd.AddCommand(cli.StartCmd())
 	rootCmd.AddCommand(cli.ServeCmd())
+	rootCmd.AddCommand(cli.PeersCmd())
 	rootCmd.AddCommand(cli.ExportCmd())
 	rootCmd.AddCommand(cli.ImportCmd())
 

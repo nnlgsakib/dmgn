@@ -9,16 +9,18 @@ import (
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/internal/crypto"
 	"github.com/dmgn/dmgn/pkg/identity"
+	"github.com/dmgn/dmgn/pkg/network"
 	"github.com/dmgn/dmgn/pkg/storage"
 )
 
 type Server struct {
-	store      *storage.Store
-	cryptoEng  *crypto.Engine
-	identity   *identity.Identity
-	config     *config.Config
-	auth       *AuthMiddleware
-	httpServer *http.Server
+	store       *storage.Store
+	cryptoEng   *crypto.Engine
+	identity    *identity.Identity
+	config      *config.Config
+	auth        *AuthMiddleware
+	httpServer  *http.Server
+	networkHost *network.Host
 }
 
 func NewServer(cfg *config.Config, store *storage.Store, cryptoEng *crypto.Engine, id *identity.Identity) (*Server, error) {
@@ -48,6 +50,11 @@ func NewServer(cfg *config.Config, store *storage.Store, cryptoEng *crypto.Engin
 	return s, nil
 }
 
+// SetNetworkHost attaches a network host to the server for live network stats.
+func (s *Server) SetNetworkHost(h *network.Host) {
+	s.networkHost = h
+}
+
 func (s *Server) Start() error {
 	fmt.Printf("API server listening on :%d\n", s.config.APIPort)
 	return s.httpServer.ListenAndServe()
@@ -71,6 +78,7 @@ func (s *Server) setupRoutes() *http.ServeMux {
 	mux.Handle("POST /memory", s.auth.Authenticate(http.HandlerFunc(s.HandleAddMemory)))
 	mux.Handle("GET /query", s.auth.Authenticate(http.HandlerFunc(s.HandleQuery)))
 	mux.Handle("GET /status", s.auth.Authenticate(http.HandlerFunc(s.HandleStatus)))
+	mux.Handle("GET /peers", s.auth.Authenticate(http.HandlerFunc(s.HandlePeers)))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})

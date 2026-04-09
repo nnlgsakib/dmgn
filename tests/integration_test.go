@@ -2,18 +2,23 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/dmgn/dmgn/internal/api"
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/internal/crypto"
 	"github.com/dmgn/dmgn/pkg/identity"
 	"github.com/dmgn/dmgn/pkg/memory"
+	"github.com/dmgn/dmgn/pkg/network"
 	"github.com/dmgn/dmgn/pkg/storage"
 )
 
@@ -471,5 +476,145 @@ func TestMultipleMemoriesQueryScoring(t *testing.T) {
 		if !strings.Contains(strings.ToLower(r.Content), "programming") {
 			t.Errorf("Unexpected result without 'programming': %s", r.Content)
 		}
+	}
+}
+
+// --- Phase 3: Networking Integration Tests ---
+
+func createTestNetworkHost(t *testing.T) (*network.Host, *identity.Identity) {
+	t.Helper()
+	dir := t.TempDir()
+	id, err := identity.Generate("net-test-passphrase", dir)
+	if err != nil {
+		t.Fatalf("Generate identity failed: %v", err)
+	}
+
+	key, err := network.DeriveLibp2pKey(id)
+	if err != nil {
+		t.Fatalf("DeriveLibp2pKey failed: %v", err)
+	}
+
+	h, err := network.NewHost(network.HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key,
+	})
+	if err != nil {
+		t.Fatalf("NewHost failed: %v", err)
+	}
+	t.Cleanup(func() { h.Stop() })
+	return h, id
+}
+
+func TestStartWithNetworking(t *testing.T) {
+	h, _ := createTestNetworkHost(t)
+
+	if err := h.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	if h.ID() == "" {
+		t.Error("peer ID should be non-empty after start")
+	}
+
+	if h.PeerCount() != 0 {
+		t.Errorf("expected 0 peers initially, got %d", h.PeerCount())
+	}
+
+	stats := h.NetworkStats()
+	if stats["dht_mode"] != "active" {
+		t.Errorf("expected dht_mode 'active' after Start(), got %v", stats["dht_mode"])
+	}
+}
+
+func TestAPIStatusWithNetwork(t *testing.T) {
+	h, id := createTestNetworkHost(t)
+	if err := h.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	storageDir := t.TempDir()
+	store, err := storage.New(storage.Options{DataDir: storageDir})
+	if err != nil {
+		t.Fatalf("New store failed: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	masterKey, _ := id.DeriveKey("memory-encryption", 32)
+	eng, _ := crypto.NewEngine(masterKey)
+	cfg := config.DefaultConfig()
+	cfg.DataDir = storageDir
+
+	srv, err := api.NewServer(cfg, store, eng, id)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
+	srv.SetNetworkHost(h)
+
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(func() { ts.Close() })
+
+	req, _ := http.NewRequest("GET", ts.URL+"/status", nil)
+	req.Header.Set("Authorization", "Bearer "+srv.APIKey())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("status request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var statusResp struct {
+		Network struct {
+			Status      string   `json:"status"`
+			Peers       int      `json:"peers"`
+			PeerID      string   `json:"peer_id"`
+			ListenAddrs []string `json:"listen_addrs"`
+		} `json:"network"`
+	}
+	json.NewDecoder(resp.Body).Decode(&statusResp)
+
+	if statusResp.Network.Status != "running" {
+		t.Errorf("expected network status 'running', got %q", statusResp.Network.Status)
+	}
+	if statusResp.Network.PeerID == "" {
+		t.Error("expected non-empty peer_id in status response")
+	}
+	if statusResp.Network.Peers != 0 {
+		t.Errorf("expected 0 peers, got %d", statusResp.Network.Peers)
+	}
+}
+
+func TestTwoPeersDiscoverViaDirect(t *testing.T) {
+	h1, _ := createTestNetworkHost(t)
+	h2, _ := createTestNetworkHost(t)
+
+	// Connect h2 to h1 directly
+	h1Info := peer.AddrInfo{
+		ID:    h1.ID(),
+		Addrs: h1.Addrs(),
+	}
+
+	if err := h2.LibP2PHost().Connect(context.Background(), h1Info); err != nil {
+		t.Fatalf("failed to connect h2 to h1: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	if h1.PeerCount() != 1 {
+		t.Errorf("h1 expected 1 peer, got %d", h1.PeerCount())
+	}
+	if h2.PeerCount() != 1 {
+		t.Errorf("h2 expected 1 peer, got %d", h2.PeerCount())
+	}
+
+	peers1 := h1.ConnectedPeers()
+	if len(peers1) != 1 || peers1[0].ID != h2.ID().String() {
+		t.Errorf("h1 should see h2 as connected peer")
+	}
+
+	peers2 := h2.ConnectedPeers()
+	if len(peers2) != 1 || peers2[0].ID != h1.ID().String() {
+		t.Errorf("h2 should see h1 as connected peer")
 	}
 }

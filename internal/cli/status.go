@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/spf13/cobra"
-	
+
 	"github.com/dmgn/dmgn/internal/config"
 	"github.com/dmgn/dmgn/pkg/identity"
 	"github.com/dmgn/dmgn/pkg/storage"
@@ -71,9 +73,13 @@ func StatusCmd() *cobra.Command {
 
 			fmt.Println()
 			fmt.Println("Network:")
-			fmt.Println("  Status: Not started")
-			fmt.Println("  Peers: 0 connected")
-			fmt.Printf("  Listen: %s\n", cfg.ListenAddr)
+			if isNodeRunning(cfg.APIPort) {
+				fmt.Println("  Status: Running")
+				fmt.Println("  Use 'dmgn peers' for connected peer details")
+			} else {
+				fmt.Println("  Status: Not running")
+			}
+			fmt.Printf("  Listen: %s (configured)\n", cfg.ListenAddr)
 
 			return nil
 		},
@@ -82,4 +88,13 @@ func StatusCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory")
 
 	return cmd
+}
+
+func isNodeRunning(apiPort int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", apiPort), 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
