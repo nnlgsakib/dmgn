@@ -10,6 +10,8 @@ import (
 	libp2p_host "github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
 )
 
 // RemoteQueryOrchestrator fans out queries to connected peers.
@@ -61,12 +63,20 @@ func (ro *RemoteQueryOrchestrator) SearchAll(ctx context.Context, req QueryReque
 	var wg sync.WaitGroup
 
 	queryID := fmt.Sprintf("q-%d", time.Now().UnixNano())
-	protoReq := QueryProtocolRequest{
-		QueryID:   queryID,
+	var pbFilters *dmgnpb.QueryFilters
+	if req.Filters.Type != "" || req.Filters.After != 0 || req.Filters.Before != 0 {
+		pbFilters = &dmgnpb.QueryFilters{
+			Type:   req.Filters.Type,
+			After:  req.Filters.After,
+			Before: req.Filters.Before,
+		}
+	}
+	protoReq := &dmgnpb.QueryRequest{
+		QueryId:   queryID,
 		Embedding: req.Embedding,
 		TextQuery: req.TextQuery,
-		Limit:     req.Limit * 2, // ask for more to allow dedup
-		Filters:   req.Filters,
+		Limit:     int32(req.Limit * 2), // ask for more to allow dedup
+		Filters:   pbFilters,
 	}
 
 	for _, p := range connectedPeers {
@@ -86,10 +96,23 @@ func (ro *RemoteQueryOrchestrator) SearchAll(ctx context.Context, req QueryReque
 				return
 			}
 
+			// Convert proto results to internal types
+			var peerResults []QueryResult
+			for _, r := range resp.Results {
+				peerResults = append(peerResults, QueryResult{
+					MemoryID:   r.MemoryId,
+					Score:      r.Score,
+					Type:       r.Type,
+					Timestamp:  r.Timestamp,
+					Snippet:    r.Snippet,
+					SourcePeer: r.SourcePeer,
+				})
+			}
+
 			mu.Lock()
 			allPeerResults = append(allPeerResults, peerResultSet{
 				peerID:  pid.String(),
-				results: resp.Results,
+				results: peerResults,
 			})
 			mu.Unlock()
 		}(p)
