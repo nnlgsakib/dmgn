@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: All Phases Complete
-last_updated: "2026-04-09T10:30:00.000Z"
+status: Performance Optimization (Protobuf Migration)
+last_updated: "2026-04-09T12:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 19
   completed_plans: 19
   percent: 100
+  discuss_phase: 1
 ---
 
 # State: DMGN
@@ -20,7 +21,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** All phases complete — production ready
+**Current focus:** Protobuf migration for performance optimization (Phase 1 context captured)
 
 ## Phase Progress
 
@@ -63,6 +64,7 @@ Phase 6 Completed Plans:
 15. **Official MCP Go SDK**: `modelcontextprotocol/go-sdk` for long-term stability over community alternatives.
 16. **Local-only MCP by default**: MCP server works offline-first, `--network` flag opts into P2P features.
 17. **Weighted reputation scoring**: `0.3*uptime + 0.3*latency + 0.2*sync + 0.2*availability` with exponential decay toward neutral.
+18. **Protobuf migration (hybrid)**: Wire (store/fetch, gossip, delta) = protobuf, disk = BadgerDB native, memory = hybrid (protobuf replication + JSON local), API = JSON (required)
 
 ## Blockers
 
@@ -76,6 +78,7 @@ None.
 
 ## Recent Changes
 
+- 2026-04-09: Phase 1 context captured — Protobuf migration decisions (wire format, gossip, disk, memory model)
 - 2026-04-09: Phase 6 complete — 4 plans executed, 28 new tests, 13 test packages all passing
 - 2026-04-09: Phase 6 context gathered — MCP, OTel, docs, backup, peer reputation
 - 2026-04-09: Phase 5 complete — 3 plans executed, all tests passing (8 vectorindex + 16 sync + 6 query)
