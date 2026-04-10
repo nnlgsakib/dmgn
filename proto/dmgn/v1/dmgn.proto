@@ -56,6 +56,7 @@ message GossipMessage {
   int64 timestamp = 4;
   uint64 sequence = 5;
   bytes edge = 6;
+  bytes node = 7;
 }
 
 // SyncRequest is sent by the initiator to begin delta sync.
@@ -82,6 +83,25 @@ message Edge {
   string edge_type = 4;
   int64 timestamp = 5;
   string creator_peer_id = 6;
+}
+
+// KnowledgeNode represents a node in the knowledge graph (wire format).
+message KnowledgeNode {
+  string id = 1;
+  string type = 2;
+  string label = 3;
+  map<string, string> meta = 4;
+  int64 created_at = 5;
+  string creator_peer_id = 6;
+}
+
+// KnowledgeNodeMessage wraps a knowledge graph node for gossip.
+message KnowledgeNodeMessage {
+  string type = 1;
+  KnowledgeNode node = 2;
+  string sender_peer_id = 3;
+  int64 timestamp = 4;
+  uint64 sequence = 5;
 }
 
 // QueryFilters holds optional query filters.

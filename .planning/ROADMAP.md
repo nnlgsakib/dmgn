@@ -17,6 +17,8 @@
 | 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
 | 8 | [Networking Enhancements](#phase-8-networking-enhancements) | QUIC transport, NAT traversal, networking security | QUIC v1, Relay v2, hole punching, connection gater, resource mgr | 4 |
 | 10 | [Graph Sync](#phase-10-distributed-graph-sync) | Distribute knowledge graph edges across all peers | Edge gossip, edge delta sync, edge proto, MCP wiring | 0 |
+| 11 | [Hybrid Link Processing](#phase-11-hybrid-link-processing) | Auto-linking memories on add_memory | Config, auto-linking function, MCP integration | 0 |
+| 12 | [Knowledge Graph (DAG)](#phase-12-knowledge-graph-dag) | Generic DAG for any entity relationship | Node, Edge, Graph, builder, queries | 0 |
 
 ---
 
@@ -250,6 +252,8 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 | 8 | **Planned** | — | — |
 | 9 | **Planned** | — | — |
 | 10 | **Complete** | 2026-04-10 | 2026-04-10 |
+| 11 | **Complete** | 2026-04-10 | 2026-04-10 |
+| 12 | **Complete** | 2026-04-10 | 2026-04-10 |
 
 ---
 
@@ -308,4 +312,75 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 
 ---
 
-*Last updated: 2026-04-10 — Added Phase 10 for distributed graph sync*
+## Phase 11: Hybrid Link Processing
+
+**Goal:** Add automatic link/edge generation when memories are added. System automatically creates knowledge graph edges (via embedding similarity + time clustering) while preserving existing manual `link_memories` tool for AI agent explicit linking.
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 10 (edge gossip infrastructure)
+
+**Success Criteria:**
+1. Auto-linking happens immediately on add_memory — system scans and links to related memories
+2. Hybrid algorithm combines embedding similarity + time clustering
+3. Configurable thresholds (similarity default 0.7, time window default 60 minutes)
+4. Edge weight = similarity score preserves confidence signal
+5. Auto-generated edges broadcast to network via gossip
+6. Manual link_memories tool unchanged for AI agent explicit linking
+
+**Key Components:**
+- Config fields: EnableAutoLink, AutoLinkSimilarityThreshold, AutoLinkTimeWindowMinutes
+- Auto-linking in handleAddMemory hook point
+- Edge type field distinguishes "auto" vs "manual" edges
+- Time clustering for memories within configured time window
+
+**Plans:** 1/1 plans complete
+
+**Plan list:**
+- [x] 11-01-PLAN.md — Hybrid link processing: config + auto-linking + MCP integration
+
+---
+
+## Phase 12: Knowledge Graph (DAG)
+
+**Goal:** Build a generic knowledge graph / DAG system for DMGN — extract entities from any source (code, memories, text), discover relationships, store as typed edges, and enable queries.
+
+The graph supports any node type and typed edges, unlike embedding similarity which is implicit.
+
+**Why this matters:**
+
+Embedding similarity gives implicit connections. Knowledge graph gives explicit, meaningful relationships that can be queried and traversed.
+
+```
+programmer --CREATES--> nlg
+nlg --BUILT_BY--> programmer
+nlg --CREATES--> ai_stuff
+ai_stuff --CREATED_BY--> nlg
+programmer --USES--> tools
+```
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 5 (storage foundation), Phase 11 (auto-linking)
+
+**Success Criteria:**
+1. Nodes can be any entity: person, concept, memory, file, function, etc
+2. Edges are typed: CREATES, USES, BUILT_BY, PART_OF, RELATED_TO, etc
+3. Graph builds automatically from entity extraction and relationship discovery
+4. Graph is queriable: find incoming, outgoing, or full traversal
+5. MCP tools for graph operations
+
+**Key Components:**
+- Graph package (Node, Edge, Graph types)
+- Builder (entity extraction, relationship discovery)
+- Query engine (traversal, path finding)
+- MCP integration (add_node, add_edge, query_graph, find_related)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [ ] 12-01-PLAN.md — Knowledge graph: graph types + builder + queries + MCP
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 12 for knowledge graph (DAG)*

@@ -13,6 +13,7 @@ import (
 
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/graph"
 	"github.com/nnlgsakib/dmgn/pkg/identity"
 	"github.com/nnlgsakib/dmgn/pkg/memory"
 	"github.com/nnlgsakib/dmgn/pkg/query"
@@ -23,15 +24,17 @@ import (
 
 // MCPServer wraps a Model Context Protocol server for AI agent integration.
 type MCPServer struct {
-	store       *storage.Store
-	vecIndex    *vectorindex.VectorIndex
-	queryEngine *query.QueryEngine
-	cryptoEng   *crypto.Engine
-	identity    *identity.Identity
-	config      *config.Config
+	store           *storage.Store
+	vecIndex        *vectorindex.VectorIndex
+	queryEngine     *query.QueryEngine
+	cryptoEng       *crypto.Engine
+	identity        *identity.Identity
+	config          *config.Config
 	logger          *slog.Logger
 	onBroadcast     func(mem *memory.Memory)
 	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
+	kgBroadcaster   func(nodeID, nodeType, label string, meta map[string]string)
+	kgGraph         *graph.Graph
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -43,7 +46,7 @@ func NewMCPServer(
 	id *identity.Identity,
 	cfg *config.Config,
 ) *MCPServer {
-	return &MCPServer{
+	mcpServer := &MCPServer{
 		store:       store,
 		vecIndex:    vecIndex,
 		queryEngine: queryEngine,
@@ -52,6 +55,12 @@ func NewMCPServer(
 		config:      cfg,
 		logger:      slog.New(slog.NewJSONHandler(os.Stderr, nil)),
 	}
+
+	if cfg.EnableKnowledgeGraph && store != nil {
+		mcpServer.kgGraph = graph.NewGraph(store.DB())
+	}
+
+	return mcpServer
 }
 
 // SetLogger overrides the default logger.
@@ -69,6 +78,12 @@ func (s *MCPServer) SetBroadcaster(fn func(mem *memory.Memory)) {
 // to broadcast it to the gossip network for distributed graph sync.
 func (s *MCPServer) SetEdgeBroadcaster(fn func(fromID, toID string, weight float32, edgeType string)) {
 	s.edgeBroadcaster = fn
+}
+
+// SetKGBroadcaster sets the callback invoked after a knowledge graph node is created,
+// to broadcast it to the gossip network.
+func (s *MCPServer) SetKGBroadcaster(fn func(nodeID, nodeType, label string, meta map[string]string)) {
+	s.kgBroadcaster = fn
 }
 
 // newServer creates a configured MCP server instance with all tools registered.
@@ -118,6 +133,21 @@ func (s *MCPServer) newServer() *mcp.Server {
 		Name:        "load_skill",
 		Description: "Load DMGN skill content for agent context. Call this when user mentions DMGN or wants to initialize DMGN capabilities.",
 	}, s.handleLoadSkill)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_node",
+		Description: "Add a node to the knowledge graph. Node can be any entity: person, concept, memory, file, function, etc.",
+	}, s.handleAddNode)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_edge",
+		Description: "Add an edge between two knowledge graph nodes with typed relationship (CREATES, USES, BUILT_BY, RELATED_TO, etc).",
+	}, s.handleAddEdgeKG)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "query_graph",
+		Description: "Query the knowledge graph for incoming/outgoing edges from a node.",
+	}, s.handleQueryGraph)
 
 	return server
 }
@@ -261,6 +291,142 @@ type GetStatusOutput struct {
 
 // --- Tool Handlers ---
 
+// autoAddToKG extracts entities from memory content and adds them to knowledge graph
+func (s *MCPServer) autoAddToKG(ctx context.Context, mem *memory.Memory) {
+	if s.kgGraph == nil || mem == nil {
+		return
+	}
+
+	plain, err := mem.Decrypt(s.cryptoEng.Decrypt)
+	if err != nil {
+		return
+	}
+
+	nodes, err := graph.ExtractEntities(plain.Content, graph.SourceTypeMemory)
+	if err != nil || len(nodes) == 0 {
+		return
+	}
+
+	for _, node := range nodes {
+		node.ID = fmt.Sprintf("mem:%s:%s", mem.ID[:8], node.Label)
+		if err := s.kgGraph.AddNode(&node); err != nil {
+			s.logger.Debug("autoAddToKG: failed to add node", "err", err)
+			continue
+		}
+
+		if s.kgBroadcaster != nil {
+			metaStr := make(map[string]string)
+			for k, v := range node.Meta {
+				metaStr[k] = fmt.Sprintf("%v", v)
+			}
+			s.kgBroadcaster(node.ID, node.Type, node.Label, metaStr)
+		}
+	}
+
+	edge := &graph.Edge{
+		From:   mem.ID,
+		To:     nodes[0].ID,
+		Type:   "CONTAINS",
+		Weight: 1.0,
+	}
+	if err := s.kgGraph.AddEdge(edge); err == nil && s.kgBroadcaster != nil {
+		s.kgBroadcaster(edge.ID, "memory", "contains", map[string]string{"from": mem.ID})
+	}
+
+	s.logger.Info("autoAddToKG: entities extracted", "count", len(nodes), "memory", mem.ID)
+}
+
+// autoLinkNewMemory automatically creates edges from a new memory to similar
+// and time-proximate memories based on config thresholds.
+func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
+	cfg := s.config
+	if !cfg.EnableAutoLink {
+		s.logger.Debug("auto-linking disabled in config")
+		return
+	}
+	if s.vecIndex == nil || s.store == nil {
+		s.logger.Debug("auto-linking skipped: vecIndex or store nil")
+		return
+	}
+	if len(mem.Embedding) == 0 {
+		s.logger.Debug("auto-linking skipped: no embedding in memory", "memID", mem.ID)
+		return
+	}
+
+	s.logger.Info("auto-linking starting", "memID", mem.ID, "embeddingDim", len(mem.Embedding))
+
+	similarResults := s.vecIndex.Search(mem.Embedding, cfg.MaxAutoLinksPerMemory)
+	s.logger.Info("auto-linking search complete", "results", len(similarResults))
+
+	linked := make(map[string]bool)
+	similarCount := 0
+
+	for _, result := range similarResults {
+		if result.MemoryID == mem.ID {
+			continue
+		}
+		if result.Score < cfg.AutoLinkSimilarityThreshold {
+			continue
+		}
+		if linked[result.MemoryID] {
+			continue
+		}
+
+		weight := float32(result.Score)
+		if err := s.store.AddEdge(mem.ID, result.MemoryID, weight, "auto"); err == nil {
+			linked[result.MemoryID] = true
+			graph := s.store.GetGraph()
+			_ = graph.AddEdge(mem.ID, result.MemoryID, weight, "auto")
+			similarCount++
+
+			if s.edgeBroadcaster != nil {
+				s.logger.Info("auto-linking broadcasting edge", "from", mem.ID, "to", result.MemoryID, "weight", weight, "type", "auto")
+				s.edgeBroadcaster(mem.ID, result.MemoryID, weight, "auto")
+			}
+		} else {
+			s.logger.Error("auto-linking failed to add edge", "err", err)
+		}
+	}
+
+	recent, err := s.store.GetRecentMemories(100)
+	if err != nil {
+		s.logger.Error("auto-linking failed to get recent memories", "err", err)
+		return
+	}
+	timeWindowNanos := int64(cfg.AutoLinkTimeWindowMinutes) * 60 * 1e9
+	timeCount := 0
+
+	for _, recentMem := range recent {
+		if recentMem.ID == mem.ID {
+			continue
+		}
+		if linked[recentMem.ID] {
+			continue
+		}
+
+		timeDiff := mem.Timestamp - recentMem.Timestamp
+		if timeDiff < 0 {
+			timeDiff = -timeDiff
+		}
+		if timeDiff <= timeWindowNanos {
+			weight := float32(0.5)
+			if err := s.store.AddEdge(mem.ID, recentMem.ID, weight, "auto"); err == nil {
+				linked[recentMem.ID] = true
+				graph := s.store.GetGraph()
+				_ = graph.AddEdge(mem.ID, recentMem.ID, weight, "auto")
+				timeCount++
+
+				if s.edgeBroadcaster != nil {
+					s.logger.Info("auto-linking broadcasting time edge", "from", mem.ID, "to", recentMem.ID, "weight", weight, "type", "auto")
+					s.edgeBroadcaster(mem.ID, recentMem.ID, weight, "auto")
+				}
+			}
+		}
+	}
+
+	s.logger.Info("auto-linking complete", "memID", mem.ID, "similarEdges", similarCount, "timeEdges", timeCount)
+}
+
 func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolRequest, input AddMemoryInput) (*mcp.CallToolResult, AddMemoryOutput, error) {
 	memType := memory.TypeText
 	if input.Type != "" {
@@ -288,6 +454,14 @@ func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolReques
 
 	if len(mem.Embedding) > 0 && s.vecIndex != nil {
 		s.vecIndex.Add(mem.ID, mem.Embedding)
+	}
+
+	// Auto-link to similar/time-proximate memories
+	s.autoLinkNewMemory(ctx, mem)
+
+	// Auto-extract entities and add to knowledge graph
+	if s.config.EnableKnowledgeGraph && s.kgGraph != nil {
+		s.autoAddToKG(ctx, mem)
 	}
 
 	// Broadcast to gossip network
@@ -503,6 +677,56 @@ type LoadSkillOutput struct {
 	Source string `json:"source"`
 }
 
+// --- knowledge graph handlers ---
+
+type AddNodeInput struct {
+	ID    string         `json:"id"`
+	Type  string         `json:"type"`
+	Label string         `json:"label"`
+	Meta  map[string]any `json:"meta,omitempty"`
+}
+
+type AddNodeOutput struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Label   string `json:"label"`
+	Created bool   `json:"created"`
+}
+
+type AddEdgeKGInput struct {
+	From   string  `json:"from"`
+	To     string  `json:"to"`
+	Type   string  `json:"type"`
+	Weight float32 `json:"weight"`
+}
+
+type AddEdgeKGOutput struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Type    string `json:"type"`
+	Created bool   `json:"created"`
+}
+
+type QueryGraphInput struct {
+	NodeID    string `json:"node_id"`
+	Direction string `json:"direction"`
+	EdgeType  string `json:"edge_type"`
+	MaxDepth  int    `json:"max_depth"`
+}
+
+type QueryGraphOutput struct {
+	Node     string     `json:"node"`
+	Incoming []EdgeInfo `json:"incoming"`
+	Outgoing []EdgeInfo `json:"outgoing"`
+}
+
+type EdgeInfo struct {
+	From   string  `json:"from"`
+	To     string  `json:"to"`
+	Type   string  `json:"type"`
+	Weight float32 `json:"weight"`
+}
+
 func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolRequest, input LoadSkillInput) (*mcp.CallToolResult, LoadSkillOutput, error) {
 	content, err := skill.Load()
 	if err != nil {
@@ -521,6 +745,104 @@ func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolReques
 	return nil, LoadSkillOutput{
 		Prompt: string(content),
 		Source: source,
+	}, nil
+}
+
+func (s *MCPServer) handleAddNode(ctx context.Context, req *mcp.CallToolRequest, input AddNodeInput) (*mcp.CallToolResult, AddNodeOutput, error) {
+	if s.kgGraph == nil {
+		return nil, AddNodeOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	metaAny := make(map[string]any)
+	if input.Meta != nil {
+		for k, v := range input.Meta {
+			metaAny[k] = v
+		}
+	}
+
+	node := &graph.Node{
+		ID:    input.ID,
+		Type:  input.Type,
+		Label: input.Label,
+		Meta:  metaAny,
+	}
+
+	if err := s.kgGraph.AddNode(node); err != nil {
+		return nil, AddNodeOutput{}, fmt.Errorf("failed to add node: %w", err)
+	}
+
+	if s.kgBroadcaster != nil {
+		metaStr := make(map[string]string)
+		for k, v := range metaAny {
+			metaStr[k] = fmt.Sprintf("%v", v)
+		}
+		s.kgBroadcaster(node.ID, node.Type, node.Label, metaStr)
+	}
+
+	return nil, AddNodeOutput{
+		ID:      node.ID,
+		Type:    node.Type,
+		Label:   node.Label,
+		Created: true,
+	}, nil
+}
+
+func (s *MCPServer) handleAddEdgeKG(ctx context.Context, req *mcp.CallToolRequest, input AddEdgeKGInput) (*mcp.CallToolResult, AddEdgeKGOutput, error) {
+	if s.kgGraph == nil {
+		return nil, AddEdgeKGOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	if input.Weight == 0 {
+		input.Weight = 1.0
+	}
+
+	edge := &graph.Edge{
+		From:   input.From,
+		To:     input.To,
+		Type:   input.Type,
+		Weight: input.Weight,
+	}
+
+	if err := s.kgGraph.AddEdge(edge); err != nil {
+		return nil, AddEdgeKGOutput{}, fmt.Errorf("failed to add edge: %w", err)
+	}
+
+	return nil, AddEdgeKGOutput{
+		From:    edge.From,
+		To:      edge.To,
+		Type:    edge.Type,
+		Created: true,
+	}, nil
+}
+
+func (s *MCPServer) handleQueryGraph(ctx context.Context, req *mcp.CallToolRequest, input QueryGraphInput) (*mcp.CallToolResult, QueryGraphOutput, error) {
+	if s.kgGraph == nil {
+		return nil, QueryGraphOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	var incoming, outgoing []graph.Edge
+
+	if input.Direction == "incoming" || input.Direction == "" {
+		incoming, _ = s.kgGraph.GetIncoming(input.NodeID, input.EdgeType)
+	}
+	if input.Direction == "outgoing" || input.Direction == "" {
+		outgoing, _ = s.kgGraph.GetOutgoing(input.NodeID, input.EdgeType)
+	}
+
+	inInfo := make([]EdgeInfo, len(incoming))
+	for i, e := range incoming {
+		inInfo[i] = EdgeInfo{From: e.From, To: e.To, Type: e.Type, Weight: e.Weight}
+	}
+
+	outInfo := make([]EdgeInfo, len(outgoing))
+	for i, e := range outgoing {
+		outInfo[i] = EdgeInfo{From: e.From, To: e.To, Type: e.Type, Weight: e.Weight}
+	}
+
+	return nil, QueryGraphOutput{
+		Node:     input.NodeID,
+		Incoming: inInfo,
+		Outgoing: outInfo,
 	}, nil
 }
 

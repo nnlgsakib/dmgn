@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/natefinch/lumberjack.v2"
 	"google.golang.org/protobuf/proto"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/multiformats/go-multiaddr"
@@ -53,11 +53,11 @@ type Daemon struct {
 	mcpServer   *dmgnmcp.MCPServer
 	logger      *slog.Logger
 
-	ctx       context.Context
-	cancel    context.CancelFunc
-	nodeCtx   context.Context
-	nodeStop  context.CancelFunc
-	verbose   bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	nodeCtx  context.Context
+	nodeStop context.CancelFunc
+	verbose  bool
 }
 
 // New creates a new Daemon instance.
@@ -343,6 +343,32 @@ func (d *Daemon) Start(ctx context.Context) error {
 		}
 	}
 
+	// 12c. Knowledge graph node broadcaster
+	broadcastKGNode := func(nodeID, nodeType, label string, meta map[string]string) {
+		if d.cfg.EnableKnowledgeGraph && d.gossipMgr != nil {
+			node := &dmgnpb.KnowledgeNode{
+				Id:            nodeID,
+				Type:          nodeType,
+				Label:         label,
+				Meta:          meta,
+				CreatedAt:     time.Now().UnixNano(),
+				CreatorPeerId: localPeerID,
+			}
+			data, err := proto.Marshal(node)
+			if err != nil {
+				d.logger.Error("failed to marshal kg node", "id", nodeID, "err", err)
+				return
+			}
+			nodeSeq := edgeVV.Increment(localPeerID)
+			vvStore.SaveEdgeSequence(localPeerID, nodeSeq, "kg:"+nodeID)
+			if err := d.gossipMgr.PublishEdge(d.nodeCtx, data, nodeSeq); err != nil {
+				d.logger.Error("failed to broadcast kg node", "id", nodeID, "err", err)
+			} else {
+				d.logger.Info("kg node broadcast", "id", nodeID, "type", nodeType, "seq", nodeSeq)
+			}
+		}
+	}
+
 	// 13. Wire query engine and gossip into API server
 	d.apiServer.SetQueryEngine(d.queryEngine, d.remoteOrch)
 	if d.gossipMgr != nil {
@@ -368,6 +394,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.mcpServer.SetLogger(d.logger)
 	d.mcpServer.SetBroadcaster(broadcastMemory)
 	d.mcpServer.SetEdgeBroadcaster(broadcastEdge)
+	d.mcpServer.SetKGBroadcaster(broadcastKGNode)
 
 	// 16. Start MCP IPC listener
 	listenAddr := fmt.Sprintf("127.0.0.1:%d", d.cfg.MCPIPCPort)
