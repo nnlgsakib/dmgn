@@ -37,6 +37,8 @@ type Config struct {
 	AutoLinkSimilarityThreshold float64 `json:"auto_link_similarity_threshold"`
 	AutoLinkTimeWindowMinutes   int     `json:"auto_link_time_window_minutes"`
 	MaxAutoLinksPerMemory       int     `json:"max_auto_links_per_memory"`
+	EnableKnowledgeGraph        bool    `json:"enable_knowledge_graph"`
+	MaxGraphDepth               int     `json:"max_graph_depth"`
 	SyncInterval                string  `json:"sync_interval"`
 	GossipTopic                 string  `json:"gossip_topic"`
 	OTLPEndpoint                string  `json:"otlp_endpoint"`
@@ -76,6 +78,8 @@ func DefaultConfig() *Config {
 		AutoLinkSimilarityThreshold: 0.7,
 		AutoLinkTimeWindowMinutes:   60,
 		MaxAutoLinksPerMemory:       10,
+		EnableKnowledgeGraph:        true,
+		MaxGraphDepth:               5,
 		SyncInterval:                "60s",
 		GossipTopic:                 "dmgn/memories/1.0.0",
 		MCPIPCPort:                  0,

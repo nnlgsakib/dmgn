@@ -250,6 +250,8 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 | 8 | **Planned** | — | — |
 | 9 | **Planned** | — | — |
 | 10 | **Complete** | 2026-04-10 | 2026-04-10 |
+| 11 | **Complete** | 2026-04-10 | 2026-04-10 |
+| 12 | **Planned** | — | — |
 
 ---
 
@@ -330,11 +332,53 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 - Edge type field distinguishes "auto" vs "manual" edges
 - Time clustering for memories within configured time window
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 **Plan list:**
-- [ ] 11-01-PLAN.md — Hybrid link processing: config + auto-linking + MCP integration
+- [x] 11-01-PLAN.md — Hybrid link processing: config + auto-linking + MCP integration
 
 ---
 
-*Last updated: 2026-04-10 — Added Phase 11 for hybrid link processing*
+## Phase 12: Knowledge Graph (DAG)
+
+**Goal:** Build a generic knowledge graph / DAG system for DMGN — extract entities from any source (code, memories, text), discover relationships, store as typed edges, and enable queries.
+
+The graph supports any node type and typed edges, unlike embedding similarity which is implicit.
+
+**Why this matters:**
+
+Embedding similarity gives implicit connections. Knowledge graph gives explicit, meaningful relationships that can be queried and traversed.
+
+```
+programmer --CREATES--> nlg
+nlg --BUILT_BY--> programmer
+nlg --CREATES--> ai_stuff
+ai_stuff --CREATED_BY--> nlg
+programmer --USES--> tools
+```
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 5 (storage foundation), Phase 11 (auto-linking)
+
+**Success Criteria:**
+1. Nodes can be any entity: person, concept, memory, file, function, etc
+2. Edges are typed: CREATES, USES, BUILT_BY, PART_OF, RELATED_TO, etc
+3. Graph builds automatically from entity extraction and relationship discovery
+4. Graph is queriable: find incoming, outgoing, or full traversal
+5. MCP tools for graph operations
+
+**Key Components:**
+- Graph package (Node, Edge, Graph types)
+- Builder (entity extraction, relationship discovery)
+- Query engine (traversal, path finding)
+- MCP integration (add_node, add_edge, query_graph, find_related)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [ ] 12-01-PLAN.md — Knowledge graph: graph types + builder + queries + MCP
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 12 for knowledge graph (DAG)*
