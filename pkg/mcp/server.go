@@ -32,6 +32,7 @@ type MCPServer struct {
 	logger          *slog.Logger
 	onBroadcast     func(mem *memory.Memory)
 	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
+	kgBroadcaster   func(nodeID, nodeType, label string, meta map[string]string)
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -69,6 +70,12 @@ func (s *MCPServer) SetBroadcaster(fn func(mem *memory.Memory)) {
 // to broadcast it to the gossip network for distributed graph sync.
 func (s *MCPServer) SetEdgeBroadcaster(fn func(fromID, toID string, weight float32, edgeType string)) {
 	s.edgeBroadcaster = fn
+}
+
+// SetKGBroadcaster sets the callback invoked after a knowledge graph node is created,
+// to broadcast it to the gossip network.
+func (s *MCPServer) SetKGBroadcaster(fn func(nodeID, nodeType, label string, meta map[string]string)) {
+	s.kgBroadcaster = fn
 }
 
 // newServer creates a configured MCP server instance with all tools registered.
