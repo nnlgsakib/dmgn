@@ -27,7 +27,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --skip-dirs-use=. --skip-files-use=proto/dmgn/v1/generate.go
+          args: --skip-files=proto/dmgn/v1/generate.go
 
   test:
     name: Test
