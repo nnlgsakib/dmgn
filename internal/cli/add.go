@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/internal/crypto"
 	"github.com/nnlgsakib/dmgn/pkg/identity"
@@ -35,7 +35,7 @@ func AddCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if !identity.Exists(cfg.IdentityDir()) {
+			if !identity.Exists(cfg.DataDir) {
 				return fmt.Errorf("no identity found. Run 'dmgn init' first")
 			}
 
@@ -44,7 +44,7 @@ func AddCmd() *cobra.Command {
 				return err
 			}
 
-			id, err := identity.Load(passphrase, cfg.IdentityDir())
+			id, err := identity.Load(passphrase, cfg.DataDir)
 			if err != nil {
 				return fmt.Errorf("failed to load identity: %w", err)
 			}
@@ -68,8 +68,8 @@ func AddCmd() *cobra.Command {
 			}
 
 			plaintext := &memory.PlaintextMemory{
-				Content:  content,
-				Type:     memType,
+				Content: content,
+				Type:    memType,
 				Metadata: map[string]string{
 					"source": "cli",
 					"author": id.ID,

@@ -13,9 +13,9 @@ import (
 
 func ExportCmd() *cobra.Command {
 	var (
-		dataDir  string
-		outFile  string
-		armored  bool
+		dataDir string
+		outFile string
+		armored bool
 	)
 
 	cmd := &cobra.Command{
@@ -28,11 +28,11 @@ func ExportCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if !identity.Exists(cfg.IdentityDir()) {
+			if !identity.Exists(cfg.DataDir) {
 				return fmt.Errorf("no identity found. Run 'dmgn init' first")
 			}
 
-			keyData, err := identity.Export(cfg.IdentityDir())
+			keyData, err := identity.Export(cfg.DataDir)
 			if err != nil {
 				return fmt.Errorf("failed to export identity: %w", err)
 			}

@@ -14,6 +14,7 @@
 | 4 | [Distributed Storage](#phase-4-distributed-storage) | Shard and replicate across peers | Sharding, replication factor 3+ | 5 |
 | 5 | [Query & Sync](#phase-5-query--sync) | Cross-peer search and consistency | Vector search, gossip sync | 5 |
 | 6 | [MCP & Polish](#phase-6-mcp--polish) | Full MCP support and production readiness | MCP tools, metrics, docs | 5 |
+| 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
 
 ---
 
@@ -143,6 +144,30 @@
 
 ---
 
+## Phase 7: Daemon Architecture & CLI Restructure
+
+**Goal:** Restructure around a persistent background daemon with integrated MCP server and automatic peer networking
+
+**Requirements:** DAEMON-01, DAEMON-02, DAEMON-03, DAEMON-04, DAEMON-05, DAEMON-06, DAEMON-07
+
+**Success Criteria:**
+1. `dmgn start` launches a background daemon that connects to peers via bootnodes
+2. Daemon auto-serves MCP on stdio — no separate `mcp-serve` command needed
+3. AI agents connect to DMGN via stdio MCP protocol (standard MCP config)
+4. `dmgn stop` gracefully stops the background daemon
+5. Daemon persists in background until explicitly stopped via `dmgn stop`
+6. All existing memory/query/network features work through the daemon
+7. CLI commands that need daemon (query, peers, status) communicate with running daemon
+
+**Key Components:**
+- Background daemon process management (PID file, fork/detach)
+- Integrated MCP server in daemon (replaces standalone mcp-serve)
+- `dmgn stop` command for daemon lifecycle
+- CLI restructuring for daemon-centric model
+- Bootnode auto-connect on daemon start
+
+---
+
 ## Dependency Graph
 
 ```
@@ -157,6 +182,8 @@ Phase 4: Distributed Storage (depends on Phase 2, 3)
 Phase 5: Query & Sync (depends on Phase 2, 4)
     ↓
 Phase 6: MCP & Polish (depends on all previous)
+    ↓
+Phase 7: Daemon Architecture & CLI Restructure (depends on all previous)
 ```
 
 ---
@@ -183,7 +210,8 @@ Phase 6: MCP & Polish (depends on all previous)
 | 4 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 5 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 6 | **Complete** | 2026-04-09 | 2026-04-09 |
+| 7 | **Planned** | — | — |
 
 ---
 
-*Last updated: 2026-04-09 after Phase 6 completion — all phases done*
+*Last updated: 2026-04-09 — Phase 7 scope changed to daemon architecture & CLI restructure*

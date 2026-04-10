@@ -116,6 +116,16 @@
 - **NETW-04**: NAT traversal via libp2p autorelay
 - **NETW-05**: Peer reputation scoring and blacklisting
 
+### Daemon Architecture & CLI Restructure
+
+- [ ] **DAEMON-01**: `dmgn start` launches a background daemon process (detached from terminal)
+- [ ] **DAEMON-02**: Daemon auto-connects to peers via configured bootnodes on startup
+- [ ] **DAEMON-03**: Daemon integrates MCP server — no separate `mcp-serve` command needed
+- [ ] **DAEMON-04**: AI agents connect to DMGN via stdio MCP protocol (standard MCP config in Claude Desktop, Cline, etc.)
+- [ ] **DAEMON-05**: `dmgn stop` gracefully stops the running background daemon
+- [ ] **DAEMON-06**: Daemon persists in background until explicitly stopped (PID file, process lifecycle)
+- [ ] **DAEMON-07**: All daemon-dependent CLI commands (status, peers, query) communicate with the running daemon
+
 ## Out of Scope
 
 | Feature | Reason |

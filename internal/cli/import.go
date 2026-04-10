@@ -31,7 +31,7 @@ func ImportCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if identity.Exists(cfg.IdentityDir()) && !force {
+			if identity.Exists(cfg.DataDir) && !force {
 				return fmt.Errorf("identity already exists. Use --force to overwrite")
 			}
 
@@ -79,7 +79,7 @@ func ImportCmd() *cobra.Command {
 				return fmt.Errorf("invalid key file: missing required fields")
 			}
 
-			if err := identity.Import(keyData, cfg.IdentityDir()); err != nil {
+			if err := identity.Import(keyData, cfg.DataDir); err != nil {
 				return fmt.Errorf("failed to import identity: %w", err)
 			}
 

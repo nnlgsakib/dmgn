@@ -54,7 +54,7 @@ func QueryCmd() *cobra.Command {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
-			if !identity.Exists(cfg.IdentityDir()) {
+			if !identity.Exists(cfg.DataDir) {
 				return fmt.Errorf("no identity found. Run 'dmgn init' first")
 			}
 
@@ -63,7 +63,7 @@ func QueryCmd() *cobra.Command {
 				return err
 			}
 
-			id, err := identity.Load(passphrase, cfg.IdentityDir())
+			id, err := identity.Load(passphrase, cfg.DataDir)
 			if err != nil {
 				return fmt.Errorf("failed to load identity: %w", err)
 			}

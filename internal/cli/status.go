@@ -29,10 +29,10 @@ func StatusCmd() *cobra.Command {
 			fmt.Println("================")
 			fmt.Println()
 
-			if identity.Exists(cfg.IdentityDir()) {
+			if identity.Exists(cfg.DataDir) {
 				fmt.Println("Identity: Present")
-				
-				keyData, err := identity.Export(cfg.IdentityDir())
+
+				keyData, err := identity.Export(cfg.DataDir)
 				if err == nil {
 					fmt.Printf("  Key file: %d bytes\n", len(keyData))
 				}
@@ -56,7 +56,7 @@ func StatusCmd() *cobra.Command {
 				fmt.Printf("  %v\n", err)
 			} else {
 				defer store.Close()
-				
+
 				stats, err := store.GetStats()
 				if err != nil {
 					fmt.Println()

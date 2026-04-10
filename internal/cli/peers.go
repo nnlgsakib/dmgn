@@ -36,7 +36,7 @@ func PeersCmd() *cobra.Command {
 				return err
 			}
 
-			id, err := identity.Load(passphrase, cfg.IdentityDir())
+			id, err := identity.Load(passphrase, cfg.DataDir)
 			if err != nil {
 				return fmt.Errorf("failed to load identity: %w", err)
 			}
