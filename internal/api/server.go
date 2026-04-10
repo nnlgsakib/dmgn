@@ -9,6 +9,7 @@ import (
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/internal/crypto"
 	"github.com/nnlgsakib/dmgn/pkg/identity"
+	"github.com/nnlgsakib/dmgn/pkg/memory"
 	"github.com/nnlgsakib/dmgn/pkg/network"
 	"github.com/nnlgsakib/dmgn/pkg/query"
 	"github.com/nnlgsakib/dmgn/pkg/storage"
@@ -28,6 +29,7 @@ type Server struct {
 	remoteOrch  *query.RemoteQueryOrchestrator
 	gossipMgr   *sync.GossipManager
 	vecIndex    *vectorindex.VectorIndex
+	onBroadcast func(mem *memory.Memory)
 }
 
 func NewServer(cfg *config.Config, store *storage.Store, cryptoEng *crypto.Engine, id *identity.Identity) (*Server, error) {
@@ -76,6 +78,12 @@ func (s *Server) SetGossipManager(gm *sync.GossipManager) {
 // SetVectorIndex attaches the vector index for embedding indexing.
 func (s *Server) SetVectorIndex(vi *vectorindex.VectorIndex) {
 	s.vecIndex = vi
+}
+
+// SetBroadcaster sets the callback invoked after a memory is saved,
+// to broadcast it to the gossip network.
+func (s *Server) SetBroadcaster(fn func(mem *memory.Memory)) {
+	s.onBroadcast = fn
 }
 
 func (s *Server) Start() error {

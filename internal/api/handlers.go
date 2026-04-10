@@ -126,6 +126,11 @@ func (s *Server) HandleAddMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Broadcast to gossip network
+	if s.onBroadcast != nil {
+		s.onBroadcast(mem)
+	}
+
 	writeJSON(w, http.StatusCreated, AddMemoryResponse{
 		ID:        mem.ID,
 		Timestamp: mem.Timestamp,

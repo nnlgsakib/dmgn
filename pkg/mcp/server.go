@@ -29,6 +29,7 @@ type MCPServer struct {
 	identity    *identity.Identity
 	config      *config.Config
 	logger      *slog.Logger
+	onBroadcast func(mem *memory.Memory)
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -54,6 +55,12 @@ func NewMCPServer(
 // SetLogger overrides the default logger.
 func (s *MCPServer) SetLogger(l *slog.Logger) {
 	s.logger = l
+}
+
+// SetBroadcaster sets the callback invoked after a memory is saved,
+// to broadcast it to the gossip network and track its sequence.
+func (s *MCPServer) SetBroadcaster(fn func(mem *memory.Memory)) {
+	s.onBroadcast = fn
 }
 
 // newServer creates a configured MCP server instance with all tools registered.
@@ -268,6 +275,11 @@ func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolReques
 
 	if len(mem.Embedding) > 0 && s.vecIndex != nil {
 		s.vecIndex.Add(mem.ID, mem.Embedding)
+	}
+
+	// Broadcast to gossip network
+	if s.onBroadcast != nil {
+		s.onBroadcast(mem)
 	}
 
 	s.logger.Info("memory added via MCP", "id", mem.ID, "type", mem.Type)

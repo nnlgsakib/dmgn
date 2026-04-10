@@ -202,10 +202,14 @@ func (d *Daemon) Start(ctx context.Context) error {
 	}
 
 	onMemoryReceived := func(mem *memory.Memory) {
-		d.store.SaveMemory(mem)
+		if err := d.store.SaveMemory(mem); err != nil {
+			d.logger.Error("failed to save received memory", "id", mem.ID, "err", err)
+			return
+		}
 		if len(mem.Embedding) > 0 {
 			d.vecIndex.Add(mem.ID, mem.Embedding)
 		}
+		d.logger.Info("memory received and saved from peer", "id", mem.ID, "type", mem.Type)
 	}
 
 	// 10. Start gossip manager
@@ -241,30 +245,57 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.deltaMgr.Start(d.nodeCtx)
 	d.logger.Info("delta sync started", "interval", d.cfg.SyncInterval)
 
-	// 12. Wire query engine and gossip into API server
+	// 12. Create broadcast function for memory propagation
+	localPeerID := d.host.ID().String()
+	broadcastMemory := func(mem *memory.Memory) {
+		if d.gossipMgr == nil {
+			return
+		}
+		// Increment version vector and track sequence
+		seq := vv.Increment(localPeerID)
+		vvStore.SaveSequence(localPeerID, seq, mem.ID)
+		vvStore.Save(localPeerID, vv)
+
+		// Serialize and publish to gossip
+		pb := mem.ToProto()
+		data, err := proto.Marshal(pb)
+		if err != nil {
+			d.logger.Error("failed to marshal memory for gossip", "id", mem.ID, "err", err)
+			return
+		}
+		if err := d.gossipMgr.Publish(d.nodeCtx, data, seq); err != nil {
+			d.logger.Error("failed to publish memory to gossip", "id", mem.ID, "err", err)
+		} else {
+			d.logger.Info("memory broadcast to network", "id", mem.ID, "seq", seq)
+		}
+	}
+
+	// 13. Wire query engine and gossip into API server
 	d.apiServer.SetQueryEngine(d.queryEngine, d.remoteOrch)
 	if d.gossipMgr != nil {
 		d.apiServer.SetGossipManager(d.gossipMgr)
 	}
 	d.apiServer.SetVectorIndex(d.vecIndex)
+	d.apiServer.SetBroadcaster(broadcastMemory)
 
 	d.logger.Info("query engine configured",
 		"alpha", d.cfg.HybridScoreAlpha,
 		"timeout", d.cfg.QueryTimeout,
 	)
 
-	// 13. Start API server
+	// 14. Start API server
 	go func() {
 		if err := d.apiServer.Start(); err != nil && err.Error() != "http: Server closed" {
 			d.logger.Error("API server error", "err", err)
 		}
 	}()
 
-	// 14. Create MCP server
+	// 15. Create MCP server
 	d.mcpServer = dmgnmcp.NewMCPServer(d.store, d.vecIndex, d.queryEngine, d.cryptoEng, id, d.cfg)
 	d.mcpServer.SetLogger(d.logger)
+	d.mcpServer.SetBroadcaster(broadcastMemory)
 
-	// 15. Start MCP IPC listener
+	// 16. Start MCP IPC listener
 	listenAddr := fmt.Sprintf("127.0.0.1:%d", d.cfg.MCPIPCPort)
 	d.mcpListener, err = net.Listen("tcp", listenAddr)
 	if err != nil {
