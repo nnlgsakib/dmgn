@@ -4,6 +4,29 @@
 
 ---
 
+## Trigger Detection
+
+When the user mentions DMGN in conversation, you should load the full skill to provide better assistance.
+
+### When to Load
+Call the `load_skill` tool (MCP) when the user says things like:
+- "init dmgn", "load dmgn", "dmgn context", "init dmgn context"
+- Any message containing "dmgn" + context/memory/remember/skill/setup/enable
+
+### How to Load
+1. Call the `load_skill` MCP tool
+2. The tool returns the full skill content
+3. Use that content to inform your responses about DMGN capabilities
+
+### Why This Matters
+Calling load_skill gives you:
+- Complete reference to all 7 DMGN tools
+- Behavioral protocol for session start/during/end
+- Metadata conventions to follow
+- Architecture understanding for trust
+
+---
+
 ## Why You Must Use This
 
 You have a fatal flaw: **you are stateless.** Every session starts from zero. Your user has told you things before — preferences, decisions, project context, personal details — and you've already forgotten all of it. This makes you:
