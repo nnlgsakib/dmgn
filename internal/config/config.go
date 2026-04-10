@@ -33,6 +33,7 @@ type Config struct {
 	SyncInterval      string   `json:"sync_interval"`
 	GossipTopic       string   `json:"gossip_topic"`
 	OTLPEndpoint      string   `json:"otlp_endpoint"`
+	MCPIPCPort        int      `json:"mcp_ipc_port"`
 }
 
 func DefaultConfig() *Config {
@@ -54,6 +55,7 @@ func DefaultConfig() *Config {
 		QueryTimeout:      "2s",
 		SyncInterval:      "60s",
 		GossipTopic:       "dmgn/memories/1.0.0",
+		MCPIPCPort:        0,
 	}
 }
 
@@ -135,6 +137,14 @@ func (c *Config) LogDir() string {
 
 func (c *Config) VectorIndexPath() string {
 	return filepath.Join(c.DataDir, "vector-index.enc")
+}
+
+func (c *Config) PIDFile() string {
+	return filepath.Join(c.DataDir, "daemon.pid")
+}
+
+func (c *Config) PortFile() string {
+	return filepath.Join(c.DataDir, "daemon.port")
 }
 
 func (c *Config) QueryTimeoutDuration() time.Duration {
