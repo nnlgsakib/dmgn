@@ -26,6 +26,7 @@ jobs:
       contents: write
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
+      id: ${{ steps.create_release.outputs.id }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
@@ -124,20 +125,22 @@ jobs:
           fi
           FILENAME="dmgn-${GOOS}-${GOARCH}${ext}"
           
-          GOFLAGS="-ldflags=-s -w" go build -o "$FILENAME" ./cmd/dmgn
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o "$FILENAME" ./cmd/dmgn
           
           echo "Built: $FILENAME"
           ls -la "$FILENAME"
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: dmgn-${{ matrix.goos }}-${{ matrix.goarch }}{{ matrix.goos == 'windows' && '.exe' || '' }}
-          asset_name: dmgn-${{ matrix.goos }}-${{ matrix.goarch }}{{ matrix.goos == 'windows' && '.exe' || '' }}
-          asset_content_type: application/octet-stream
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          ext=""
+          if [ "$GOOS" = "windows" ]; then
+            ext=".exe"
+          fi
+          FILENAME="dmgn-${GOOS}-${GOARCH}${ext}"
+          curl -sL https://api.github.com/repos/${{ github.repository }}/releases/${{ needs.release.outputs.id }}/assets?name=$FILENAME -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: application/octet-stream" --data-binary "@$FILENAME"
 
   docker:
     name: Build Docker Image
