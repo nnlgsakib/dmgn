@@ -1,10 +1,7 @@
-version: 2
-
-run:
-  timeout: 10m
-  tests: true
+version: "2"
 
 linters:
+  default: standard
   enable:
     - errcheck
     - gosimple
@@ -12,31 +9,12 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
-    - misspell
-    - unconvert
-    - unparam
-    - gocritic
-    - gosec
-    - prealloc
-    - exportloopref
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  gosec:
-    excludes:
-      - G104
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
 
 issues:
-  exclude-use-default: false
+  exclude-generated: true
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-files:
-    - "proto/dmgn/v1/generate.go"
+
+output:
+  formats:
+    - format: colored-line-number
