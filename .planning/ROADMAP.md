@@ -217,6 +217,8 @@ Phase 6: MCP & Polish (depends on all previous)
 Phase 7: Daemon Architecture & CLI Restructure (depends on all previous)
     ↓
 Phase 8: Networking Enhancements (depends on Phase 3, 7)
+    ↓
+Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 ```
 
 ---
@@ -245,7 +247,34 @@ Phase 8: Networking Enhancements (depends on Phase 3, 7)
 | 6 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 7 | **Planned** | — | — |
 | 8 | **Planned** | — | — |
+| 9 | **Planned** | — | — |
 
 ---
 
-*Last updated: 2026-04-09 — Phase 7 scope changed to daemon architecture & CLI restructure*
+## Phase 9: Skill Loader MCP Tool
+
+**Goal:** Add conversational skill-trigger system for DMGN — when user mentions "dmgn" in conversation, AI agent triggers skill loading and provides full DMGN tools reference
+
+**Requirements:** None currently defined
+
+**Success Criteria:**
+1. AI agent detects trigger phrases like "init dmgn", "dmgn context", "load dmgn" in conversation
+2. On trigger, skill content loaded from `./skill/SKILL.md` file or embedded fallback
+3. Full skill content (all 7 tools reference, behavioral protocol) injected to agent context
+4. Build-time embedding works via go:embed for offline/disk-less scenarios
+5. Both direct match and fuzzy match trigger modes functional
+
+**Key Components:**
+- Skill loader in MCP server (trigger detection, file loading)
+- Embedded skill fallback (go:embed)
+- Skill content format (tools reference, behavioral protocol)
+- Trigger patterns (direct + fuzzy match)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [x] 09-01-PLAN.md — Skill package + MCP load_skill tool + SKILL.md update
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 9 for skill-loader feature*

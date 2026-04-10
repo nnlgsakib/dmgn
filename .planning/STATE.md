@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 8 ready for planning
-last_updated: "2026-04-10T04:55:00.000Z"
+status: Milestone complete
+last_updated: "2026-04-10T10:08:49.838Z"
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 6
-  total_plans: 22
-  completed_plans: 14
-  percent: 64
+  total_plans: 28
+  completed_plans: 15
+  percent: 54
 ---
 
 # State: DMGN
@@ -20,7 +20,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** Phase 08 — Networking Enhancements (QUIC transport, NAT traversal)
+**Current focus:** Phase 09 — skill-loader
 
 ## Phase Progress
 
@@ -34,6 +34,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 | 6: MCP & Polish | **Complete** | MCP server (7 tools), OTel, backup/restore, peer reputation, docs |
 | 7: Daemon Architecture | **Complete** | Background daemon, integrated MCP, start/stop commands |
 | 8: Networking Enhancements | **Planned** | QUIC transport, NAT traversal (Circuit Relay v2, hole punching, TURN) |
+| 9: Skill Loader | **Planned** | Conversational skill-trigger system, load_skill MCP tool |
 
 ## Active Work
 
