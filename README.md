@@ -23,10 +23,10 @@ User owns their identity and memory data that persists across devices and time, 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         DMGN Node                           │
+│                      DMGN Daemon                             │
 ├─────────────────────────────────────────────────────────────┤
-│  CLI  │  REST API  │  MCP (stdio)                           │
-├───────┴────────────┴──────────────────────────────────────────┤
+│  CLI (start/stop)  │  REST API  │  MCP (TCP IPC → stdio)    │
+├────────────────────┴────────────┴────────────────────────────┤
 │  Query Engine │ Encryption │ Memory Graph                   │
 ├───────────────┴────────────┴────────────────────────────────┤
 │  Local Storage (BadgerDB) │  libp2p Network                │
@@ -59,6 +59,7 @@ User owns their identity and memory data that persists across devices and time, 
 | 4 | ✅ Complete | Distributed Storage — Shamir sharding, replication |
 | 5 | ✅ Complete | Query & Sync — Vector search, gossip sync, delta sync |
 | 6 | ✅ Complete | MCP & Polish — MCP protocol, observability, backup, docs |
+| 7 | ✅ Complete | Daemon Architecture — Background daemon, CLI restructure, MCP IPC |
 
 ## Installation
 
@@ -115,16 +116,56 @@ Found 1 memories:
    ID: a3f7b2d8e1c9... | Type: text | Links: 0
 ```
 
-### 4. View recent memories
+### 4. Start the daemon
 
 ```bash
-./dmgn query --recent --limit 5
+./dmgn start
+# Enter passphrase — daemon launches in background
 ```
 
-### 5. Check status
+Output:
+```
+Starting DMGN daemon (PID: 12345)...
+DMGN daemon started successfully!
+  PID:          12345
+  MCP IPC port: 52431
+  Multiaddresses:
+    /ip4/192.168.1.10/tcp/4001/p2p/12D3KooW...
+    /ip4/127.0.0.1/tcp/4001/p2p/12D3KooW...
+
+  To stop:      dmgn stop
+  AI tools:     dmgn mcp
+
+Share your multiaddress with other nodes as a bootstrap peer.
+```
+
+The daemon persists its own multiaddresses in `config.json` inside the data directory.
+
+### 5. Connect a second node
+
+Copy a multiaddress from node A and add it as a bootstrap peer in node B's config:
+
+```json
+{
+  "bootstrap_peers": [
+    "/ip4/192.168.1.10/tcp/4001/p2p/12D3KooW..."
+  ]
+}
+```
+
+Or start node B and manually edit `config.json` in its data directory.
+
+### 6. Check status
 
 ```bash
 ./dmgn status
+./dmgn peers
+```
+
+### 7. Stop the daemon
+
+```bash
+./dmgn stop
 ```
 
 ## CLI Commands
@@ -132,17 +173,19 @@ Found 1 memories:
 | Command | Description |
 |---------|-------------|
 | `dmgn init` | Create new identity and initialize node |
+| `dmgn start` | Start daemon in background (prompts passphrase) |
+| `dmgn start --foreground` | Start daemon in current terminal (debug mode) |
+| `dmgn stop` | Gracefully stop the running daemon |
+| `dmgn mcp` | stdio↔TCP proxy for AI agent MCP integration |
 | `dmgn add <text>` | Add a memory to local storage |
 | `dmgn query <text>` | Search memories by content |
 | `dmgn query --recent` | List recent memories |
 | `dmgn status` | Show node status and stats |
-| `dmgn start` | Start the daemon with networking and API |
-| `dmgn mcp-serve` | Start MCP server on stdio (for AI agents) |
+| `dmgn peers` | Show connected peers |
 | `dmgn backup` | Export encrypted backup of node data |
 | `dmgn restore` | Restore node from encrypted backup |
 | `dmgn export` | Export encrypted identity for backup |
 | `dmgn import` | Import identity from backup |
-| `dmgn peers` | Show connected peers |
 
 See [docs/cli-reference.md](docs/cli-reference.md) for complete usage.
 
@@ -215,6 +258,34 @@ Data directory locations:
 
 Override with `--data-dir` flag.
 
+### Generated Config (`config.json`)
+
+After `dmgn init` and first `dmgn start`, the config file includes:
+
+```json
+{
+  "data_dir": "/home/user/.config/dmgn",
+  "listen_addr": "/ip4/0.0.0.0/tcp/4001",
+  "api_port": 8080,
+  "bootstrap_peers": [],
+  "node_multiaddrs": [
+    "/ip4/192.168.1.10/tcp/4001/p2p/12D3KooW...",
+    "/ip4/127.0.0.1/tcp/4001/p2p/12D3KooW..."
+  ],
+  "mcp_ipc_port": 0,
+  "gossip_topic": "dmgn/memories/1.0.0",
+  "sync_interval": "60s",
+  "query_timeout": "2s"
+}
+```
+
+**Key fields:**
+
+- **`bootstrap_peers`** — List of peer multiaddresses to connect to on startup. Copy a `node_multiaddrs` entry from another node here.
+- **`node_multiaddrs`** — This node's own full multiaddresses (auto-populated on daemon start). Share these with other nodes.
+- **`listen_addr`** — libp2p listen address. Default `/ip4/0.0.0.0/tcp/4001`.
+- **`mcp_ipc_port`** — TCP port for MCP IPC. `0` = auto-assign.
+
 ## Development
 
 ### Project Structure
@@ -232,10 +303,11 @@ pkg/sharding/          # Shamir secret sharing
 pkg/mcp/               # MCP server for AI agent integration
 pkg/backup/            # Encrypted backup/restore
 pkg/observability/     # OpenTelemetry, structured logging
-internal/cli/          # Cobra commands
+internal/cli/          # Cobra commands (start, stop, mcp, etc.)
 internal/crypto/       # AES-GCM encryption
 internal/config/       # Configuration management
 internal/api/          # REST API server
+internal/daemon/       # Background daemon lifecycle + process mgmt
 docs/                  # Architecture, MCP, API, CLI, config docs
 examples/              # Claude Desktop, Cline config examples
 ```
@@ -256,16 +328,32 @@ go test ./...
 
 ## AI Agent Integration (MCP)
 
-DMGN works as an MCP server — Claude Desktop, Cline, and other AI agents can use it as persistent memory.
+DMGN runs an MCP server inside the daemon. AI tools connect through the `dmgn mcp` stdio proxy.
 
 ```bash
-# Build and initialize
+# 1. Build, init, and start
 go build -o dmgn ./cmd/dmgn
 ./dmgn init
+./dmgn start
 
-# Add to Claude Desktop config
-# See examples/claude_desktop_config.json
+# 2. Configure your AI tool to use:
+#    Command: dmgn mcp
 ```
+
+### Claude Desktop config (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "dmgn": {
+      "command": "dmgn",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The daemon must be running (`dmgn start`) before AI tools can connect.
 
 **7 MCP tools:** `add_memory`, `query_memory`, `get_context`, `link_memories`, `get_graph`, `delete_memory`, `get_status`
 
@@ -320,6 +408,14 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full setup guide.
 - Encrypted backup/restore (tar.gz with manifest)
 - Peer reputation scoring (weighted: uptime, latency, sync, availability)
 - Comprehensive documentation suite
+
+### Phase 7: Daemon Architecture ✅
+- Background daemon with self-re-exec pattern (cross-platform)
+- `dmgn start` / `dmgn stop` / `dmgn mcp` commands
+- MCP served over TCP IPC with stdio proxy for AI tools
+- Node multiaddresses persisted in config for bootnode sharing
+- PID file + port file lifecycle management
+- Derived keys passed securely via environment variable
 
 ## Security
 

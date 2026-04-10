@@ -106,10 +106,14 @@ func (d *Daemon) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start network host: %w", err)
 	}
 
+	peerID := d.host.ID().String()
 	d.logger.Info("network host started",
-		"peer_id", d.host.ID().String(),
+		"peer_id", peerID,
 		"addrs", d.host.Addrs(),
 	)
+
+	// Persist this node's full multiaddresses to config
+	d.persistMultiaddrs(peerID)
 
 	// 4. Reconstruct identity for subsystems that need it
 	id := d.keys.Identity()
@@ -367,4 +371,21 @@ func (d *Daemon) setupLogger() {
 
 func (d *Daemon) writePortFile(port int) error {
 	return os.WriteFile(d.cfg.PortFile(), []byte(strconv.Itoa(port)), 0600)
+}
+
+// persistMultiaddrs builds full multiaddresses (/ip4/.../tcp/.../p2p/<peerID>)
+// and writes them back to config.json so they can be shared as bootnodes.
+func (d *Daemon) persistMultiaddrs(peerID string) {
+	addrs := d.host.Addrs()
+	fullAddrs := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		fullAddrs = append(fullAddrs, fmt.Sprintf("%s/p2p/%s", addr.String(), peerID))
+	}
+
+	d.cfg.NodeMultiaddrs = fullAddrs
+	if err := d.cfg.Save(); err != nil {
+		d.logger.Error("failed to persist multiaddresses to config", "err", err)
+	} else {
+		d.logger.Info("node multiaddresses persisted to config", "addrs", fullAddrs)
+	}
 }

@@ -22,6 +22,7 @@ type Config struct {
 	LogLevel          string   `json:"log_level"`
 	Version           string   `json:"version"`
 	BootstrapPeers    []string `json:"bootstrap_peers"`
+	NodeMultiaddrs    []string `json:"node_multiaddrs"`
 	MDNSService       string   `json:"mdns_service"`
 	MaxPeersLow       int      `json:"max_peers_low"`
 	MaxPeersHigh      int      `json:"max_peers_high"`
@@ -39,7 +40,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		DataDir:           DefaultDataDir(),
-		ListenAddr:        "/ip4/0.0.0.0/tcp/0",
+		ListenAddr:        "/ip4/0.0.0.0/tcp/4001",
 		APIPort:           8080,
 		MaxRecentMemories: 1000,
 		LogLevel:          "info",

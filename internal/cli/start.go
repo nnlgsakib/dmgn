@@ -148,6 +148,15 @@ func runForeground(cfg *config.Config, keys *daemon.DerivedKeys) error {
 		return fmt.Errorf("daemon start failed: %w", err)
 	}
 
+	// Reload config to get persisted multiaddresses
+	if updated, err := config.Load(cfg.DataDir); err == nil && len(updated.NodeMultiaddrs) > 0 {
+		fmt.Println("Node multiaddresses:")
+		for _, addr := range updated.NodeMultiaddrs {
+			fmt.Printf("  %s\n", addr)
+		}
+		fmt.Println()
+	}
+
 	fmt.Println("DMGN daemon running in foreground. Press Ctrl+C to stop.")
 
 	sigChan := make(chan os.Signal, 1)
@@ -201,7 +210,8 @@ func spawnBackground(cfg *config.Config, keys *daemon.DerivedKeys) error {
 		return fmt.Errorf("daemon failed to start: %w", err)
 	}
 
-	// Read port file for display
+	// Reload config to get persisted multiaddresses and port
+	updated, _ := config.Load(cfg.DataDir)
 	portData, _ := os.ReadFile(cfg.PortFile())
 	port := strings.TrimSpace(string(portData))
 
@@ -210,7 +220,16 @@ func spawnBackground(cfg *config.Config, keys *daemon.DerivedKeys) error {
 	if port != "" {
 		fmt.Printf("  MCP IPC port: %s\n", port)
 	}
-	fmt.Printf("  To stop:      dmgn stop\n")
-	fmt.Printf("  AI tools:     dmgn mcp\n")
+	if updated != nil && len(updated.NodeMultiaddrs) > 0 {
+		fmt.Println("  Multiaddresses:")
+		for _, addr := range updated.NodeMultiaddrs {
+			fmt.Printf("    %s\n", addr)
+		}
+	}
+	fmt.Println()
+	fmt.Println("  To stop:      dmgn stop")
+	fmt.Println("  AI tools:     dmgn mcp")
+	fmt.Println()
+	fmt.Println("Share your multiaddress with other nodes as a bootstrap peer.")
 	return nil
 }
