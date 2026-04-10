@@ -141,7 +141,9 @@ jobs:
             ext=".exe"
           fi
           FILENAME="dmgn-${GOOS}-${GOARCH}${ext}"
-          curl -sL "$UPLOAD_URL?name=$FILENAME" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: application/octet-stream" --data-binary "@$FILENAME"
+          # Append ?name=filename to upload_url
+          UPLOAD_URL_WITH_NAME="${UPLOAD_URL}?name=${FILENAME}"
+          curl -sL "$UPLOAD_URL_WITH_NAME" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: application/octet-stream" --data-binary "@$FILENAME"
 
   docker:
     name: Build Docker Image
@@ -205,10 +207,10 @@ jobs:
 
       - name: Upload Checksums
         env:
-          VERSION: ${{ needs.release.outputs.version }}
           UPLOAD_URL: ${{ needs.release.outputs.upload_url }}
         run: |
-          curl -sL "$UPLOAD_URL?name=checksums.txt" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: text/plain" --data-binary "@checksums.txt"
+          UPLOAD_URL_WITH_NAME="${UPLOAD_URL}?name=checksums.txt"
+          curl -sL "$UPLOAD_URL_WITH_NAME" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: text/plain" --data-binary "@checksums.txt"
 
   notify:
     name: Notify
