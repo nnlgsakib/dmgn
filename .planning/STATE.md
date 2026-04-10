@@ -88,6 +88,7 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260410-vom | Update README.md and docs to reflect current DMGN project state | 2026-04-10 | 5effcf6 | [260410-vom-update-the-readme-md-and-docs-based-on-c](./quick/260410-vom-update-the-readme-md-and-docs-based-on-c/) |
 | 260409-g3l | Update the README like a pro - it should be a proper README with stuffs like the contributor info, add CONTRIBUTING.md, add the license | 2026-04-09 | dd0d722 | [260409-g3l-update-the-readme-like-a-pro-it-should-b](./quick/260409-g3l-update-the-readme-like-a-pro-it-should-b/) |
 
 ## Recent Changes
