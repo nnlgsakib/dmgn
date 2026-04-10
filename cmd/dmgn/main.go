@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/nnlgsakib/dmgn/internal/cli"
+	"github.com/spf13/cobra"
+)
+
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
 )
 
 func main() {
@@ -17,7 +23,7 @@ func main() {
 It provides user-owned, persistent memory that works across devices
 without relying on central servers. All data is end-to-end encrypted
 and resilient to node failure.`,
-		Version: "0.1.0",
+		Version: version,
 	}
 
 	rootCmd.AddCommand(cli.InitCmd())

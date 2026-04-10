@@ -3,3 +3,16 @@
 .windsurf/
 dmgn.*
 test-*
+*.exe
+*.test
+*.out
+coverage.out
+*.log
+.env
+.env.*
+tmp/
+temp/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

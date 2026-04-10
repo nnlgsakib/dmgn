@@ -1,0 +1,62 @@
+# This file configures goreleaser for building release binaries.
+# It's optional - GitHub Actions can also build binaries directly.
+
+project_name: dmgn
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: dmgn
+    binary: dmgn
+    main: ./cmd/dmgn
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: nnlgsakib
+    name: dmgn
+  draft: false
+  prerelease: auto
+  name_template: "DMGN {{.Tag}}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore:'
+      - '^CI:'

@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# GitHub
+.github
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dmgn-*
+*.exe
+*.test
+*.out
+coverage.out
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+Makefile
+.env
+.env.*
+
+# Test files
+*_test.go
+test-*
+
+# OpenCode and other tools
+.opencode/
+.windsurf/
+.trae/
+
+# Temporary files
+tmp/
+temp/
+*.log
