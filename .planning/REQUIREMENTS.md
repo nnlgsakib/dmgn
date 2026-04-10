@@ -115,6 +115,10 @@
 - **NETW-03**: Protocol handlers: /memory/store/1.0.0, /memory/fetch/1.0.0, /memory/query/1.0.0, /memory/sync/1.0.0
 - **NETW-04**: NAT traversal via libp2p autorelay
 - **NETW-05**: Peer reputation scoring and blacklisting
+- **NETW-06**: Connection gater that blocks low-reputation and explicitly blocked peers
+- **NETW-07**: libp2p Resource Manager with per-peer connection and stream limits
+- **NETW-08**: Per-peer rate limiting on protocol handlers (/memory/store, /memory/fetch, /memory/query)
+- **NETW-09**: Peer blocklist/allowlist configurable via config file
 
 ### Daemon Architecture & CLI Restructure
 
@@ -178,10 +182,14 @@
 | MCP-03 | Phase 6 | Pending |
 | MCP-04 | Phase 6 | Pending |
 | MCP-05 | Phase 6 | Pending |
+| NETW-06 | Phase 8 | Pending |
+| NETW-07 | Phase 8 | Pending |
+| NETW-08 | Phase 8 | Pending |
+| NETW-09 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 33 total
-- Mapped to phases: 33
+- v1 requirements: 37 total
+- Mapped to phases: 37
 - Unmapped: 0 ✓
 
 ---

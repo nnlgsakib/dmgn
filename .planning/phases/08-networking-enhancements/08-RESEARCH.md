@@ -340,6 +340,188 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 
 ---
 
+## 10. Connection Gater Analysis
+
+### go-libp2p ConnectionGater Interface
+
+The `connmgr.ConnectionGater` interface (from `github.com/libp2p/go-libp2p/core/connmgr`) has 5 methods:
+
+```go
+type ConnectionGater interface {
+    InterceptPeerDial(p peer.ID) (allow bool)
+    InterceptAddrDial(id peer.ID, addr multiaddr.Multiaddr) (allow bool)
+    InterceptAccept(addrs network.ConnMultiaddrs) (allow bool)
+    InterceptSecured(dir network.Direction, id peer.ID, addrs network.ConnMultiaddrs) (allow bool)
+    InterceptUpgraded(conn network.Conn) (allow bool, reason control.DisconnectReason)
+}
+```
+
+### DMGN Implementation Design
+
+```go
+// ReputationGater blocks peers based on reputation score and explicit blocklist.
+type ReputationGater struct {
+    reputation *ReputationManager  // existing from pkg/network/reputation.go
+    blocked    map[peer.ID]bool    // explicit blocklist (config-driven)
+    allowed    map[peer.ID]bool    // explicit allowlist (config-driven, if non-empty = allowlist mode)
+    threshold  float64             // min reputation score (default 0.2)
+    mu         sync.RWMutex
+}
+```
+
+**Gating logic:**
+1. `InterceptPeerDial` — check blocklist, check reputation ≥ threshold
+2. `InterceptAddrDial` — always allow (addr-level filtering not needed)
+3. `InterceptAccept` — always allow (can't identify peer yet at this stage for TCP)
+4. `InterceptSecured` — primary enforcement: check blocklist, allowlist mode, reputation
+5. `InterceptUpgraded` — always allow (already gated at secured stage)
+
+**Key insight:** `InterceptAccept` fires BEFORE the peer ID is known (only remote address available). Actual peer-based filtering happens at `InterceptSecured` where the peer ID is authenticated.
+
+### Integration
+
+```go
+// In NewHost:
+if cfg.ConnectionGater != nil {
+    opts = append(opts, libp2p.ConnectionGater(cfg.ConnectionGater))
+}
+```
+
+The gater is passed as a `libp2p.Option`, not created inside `NewHost`. The daemon constructs it and passes it through `HostConfig`.
+
+## 11. Resource Manager Analysis
+
+### go-libp2p Default Resource Manager
+
+go-libp2p v0.48.0 already creates a default resource manager if none is provided (see `defaults.go`). The default uses `rcmgr.DefaultLimits` scaled by system memory/FD count.
+
+```go
+import rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+
+// Create custom resource manager with limits
+limits := rcmgr.DefaultLimits
+libp2p.SetDefaultServiceLimits(&limits)
+
+// Override per-peer limits
+limits.PeerBaseLimit = rcmgr.BaseLimit{
+    Streams:         16,
+    StreamsInbound:  8,
+    StreamsOutbound: 8,
+    Conns:           8,
+    ConnsInbound:    4,
+    ConnsOutbound:   4,
+    Memory:          64 << 20, // 64 MB
+}
+
+mgr, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(limits.AutoScale()))
+```
+
+### DMGN Approach
+
+For Phase 8, use the default resource manager but with customized per-peer limits from config:
+- `MaxConnectionsPerPeer` (default 8) → maps to `PeerBaseLimit.Conns`
+- `MaxStreamsPerPeer` (default 16) → maps to `PeerBaseLimit.Streams`
+
+If config values differ from defaults, construct a custom resource manager and pass via `libp2p.ResourceManager()`.
+
+### Dependencies
+
+Already in go-libp2p — `rcmgr` is at `github.com/libp2p/go-libp2p/p2p/host/resource-manager`. No new `go get` needed.
+
+## 12. Protocol Rate Limiting Analysis
+
+### Current State
+
+Protocol handlers in `pkg/network/protocols.go` have NO rate limiting:
+- `RegisterStoreHandler` — opens stream, reads shard, stores it
+- `RegisterFetchHandler` — opens stream, looks up shard, sends it
+
+Also, query handler in `pkg/query/` has no rate limiting.
+
+### Rate Limiter Design
+
+```go
+// PeerRateLimiter tracks per-peer request rates using token bucket.
+type PeerRateLimiter struct {
+    limiters map[peer.ID]*rate.Limiter
+    mu       sync.RWMutex
+    rate     rate.Limit  // requests per second
+    burst    int         // burst size
+}
+
+func (rl *PeerRateLimiter) Allow(p peer.ID) bool {
+    rl.mu.Lock()
+    defer rl.mu.Unlock()
+    limiter, ok := rl.limiters[p]
+    if !ok {
+        limiter = rate.NewLimiter(rl.rate, rl.burst)
+        rl.limiters[p] = limiter
+    }
+    return limiter.Allow()
+}
+```
+
+### Integration into Protocol Handlers
+
+Wrap existing handlers — check rate limiter at top of handler, reject with error if exceeded:
+
+```go
+func (h *Host) RegisterStoreHandler(store StorageBackend) {
+    h.host.SetStreamHandler(StoreProtocol, func(s network.Stream) {
+        defer s.Close()
+        if h.storeLimiter != nil && !h.storeLimiter.Allow(s.Conn().RemotePeer()) {
+            writeProtoFrame(s, &dmgnpb.StoreResponse{Status: "error", Message: "rate limited"}, nil)
+            return
+        }
+        // ... existing handler logic
+    })
+}
+```
+
+### Dependencies
+
+`golang.org/x/time/rate` — already in `go.mod` as `golang.org/x/time v0.12.0`.
+
+## 13. Peer Blocklist/Allowlist Analysis
+
+### Config Fields
+
+```go
+BlockedPeers  []string `json:"blocked_peers"`   // Peer IDs to always reject
+AllowedPeers  []string `json:"allowed_peers"`    // If non-empty, only these peers allowed
+```
+
+### Runtime Management
+
+The daemon should also support runtime blocklist updates (e.g., via API endpoint or CLI command). For Phase 8, config-file-only is sufficient. Runtime updates can be a future enhancement.
+
+### Blocklist vs Allowlist Mode
+
+- If `AllowedPeers` is non-empty: **allowlist mode** — ONLY listed peers are accepted
+- Otherwise: **blocklist mode** — all peers accepted except those in `BlockedPeers` or below reputation threshold
+
+This is enforced in the `ReputationGater.InterceptSecured()` method.
+
+## 14. Security Risk Assessment
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Gater blocks legitimate peers with low initial reputation | Medium | New peers start at 0.5 (neutral), threshold 0.2 is very permissive |
+| Resource manager too restrictive | Low | Use scaled defaults, configurable limits |
+| Rate limiter memory leak (abandoned peer entries) | Low | Periodic cleanup of stale limiter entries |
+| Allowlist mode prevents network growth | Low | Allowlist is opt-in, not default behavior |
+| Bypass via peer ID rotation | Medium | Reputation starts neutral; abuse requires sustained bad behavior before blocking |
+
+## 15. Security Test Strategy
+
+1. **Connection gater unit tests**: Verify blocked peers rejected, allowed peers accepted, reputation threshold enforced
+2. **Resource manager integration**: Verify host creation with custom limits succeeds
+3. **Rate limiter unit tests**: Verify per-peer rate limiting, burst handling, different peers get independent limits
+4. **Config blocklist tests**: Verify peers in `BlockedPeers` are gated
+5. **Allowlist mode test**: Verify only `AllowedPeers` can connect when list is non-empty
+
+---
+
 ## RESEARCH COMPLETE
 
-**Confidence:** High — all go-libp2p APIs are well-documented and the existing codebase already has most dependencies. This is primarily a configuration and wiring task.
+**Confidence:** High — all go-libp2p APIs are well-documented and the existing codebase already has most dependencies. The security additions use standard go-libp2p extension points (ConnectionGater, ResourceManager) and a simple token bucket rate limiter from `x/time/rate`.

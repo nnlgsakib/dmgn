@@ -43,6 +43,10 @@ created: 2026-04-10
 | 08-02-01 | 02 | 1 | NETW-04 | — | N/A | unit | `go test ./pkg/network/... -run TestRelayService` | ❌ W0 | ⬜ pending |
 | 08-02-02 | 02 | 1 | NETW-04 | — | N/A | unit | `go test ./pkg/network/... -run TestHolePunching` | ❌ W0 | ⬜ pending |
 | 08-03-01 | 03 | 2 | NETW-02 | — | N/A | integration | `go test ./internal/daemon/... -run TestDaemonQUIC` | ❌ W0 | ⬜ pending |
+| 08-04-01 | 04 | 2 | NETW-06 | T-08-01 | Blocked peers rejected at gater | unit | `go test ./pkg/network/... -run TestReputationGater` | ❌ W0 | ⬜ pending |
+| 08-04-02 | 04 | 2 | NETW-08 | — | Rate limited peers get error response | unit | `go test ./pkg/network/... -run TestPeerRateLimiter` | ❌ W0 | ⬜ pending |
+| 08-04-03 | 04 | 2 | NETW-09 | — | N/A | unit | `go test ./internal/config/... -run TestDefaultConfig_Security` | ❌ W0 | ⬜ pending |
+| 08-05-01 | 05 | 3 | NETW-06 | T-08-01 | Gater blocks connection at libp2p level | integration | `go test ./pkg/network/... -run TestHostWithGater` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
