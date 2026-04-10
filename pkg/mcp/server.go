@@ -291,6 +291,51 @@ type GetStatusOutput struct {
 
 // --- Tool Handlers ---
 
+// autoAddToKG extracts entities from memory content and adds them to knowledge graph
+func (s *MCPServer) autoAddToKG(ctx context.Context, mem *memory.Memory) {
+	if s.kgGraph == nil || mem == nil {
+		return
+	}
+
+	plain, err := mem.Decrypt(s.cryptoEng.Decrypt)
+	if err != nil {
+		return
+	}
+
+	nodes, err := graph.ExtractEntities(plain.Content, graph.SourceTypeMemory)
+	if err != nil || len(nodes) == 0 {
+		return
+	}
+
+	for _, node := range nodes {
+		node.ID = fmt.Sprintf("mem:%s:%s", mem.ID[:8], node.Label)
+		if err := s.kgGraph.AddNode(&node); err != nil {
+			s.logger.Debug("autoAddToKG: failed to add node", "err", err)
+			continue
+		}
+
+		if s.kgBroadcaster != nil {
+			metaStr := make(map[string]string)
+			for k, v := range node.Meta {
+				metaStr[k] = fmt.Sprintf("%v", v)
+			}
+			s.kgBroadcaster(node.ID, node.Type, node.Label, metaStr)
+		}
+	}
+
+	edge := &graph.Edge{
+		From:   mem.ID,
+		To:     nodes[0].ID,
+		Type:   "CONTAINS",
+		Weight: 1.0,
+	}
+	if err := s.kgGraph.AddEdge(edge); err == nil && s.kgBroadcaster != nil {
+		s.kgBroadcaster(edge.ID, "memory", "contains", map[string]string{"from": mem.ID})
+	}
+
+	s.logger.Info("autoAddToKG: entities extracted", "count", len(nodes), "memory", mem.ID)
+}
+
 // autoLinkNewMemory automatically creates edges from a new memory to similar
 // and time-proximate memories based on config thresholds.
 func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
@@ -413,6 +458,11 @@ func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolReques
 
 	// Auto-link to similar/time-proximate memories
 	s.autoLinkNewMemory(ctx, mem)
+
+	// Auto-extract entities and add to knowledge graph
+	if s.config.EnableKnowledgeGraph && s.kgGraph != nil {
+		s.autoAddToKG(ctx, mem)
+	}
 
 	// Broadcast to gossip network
 	if s.onBroadcast != nil {
