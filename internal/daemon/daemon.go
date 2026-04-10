@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/natefinch/lumberjack.v2"
 	"google.golang.org/protobuf/proto"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/multiformats/go-multiaddr"
@@ -53,11 +53,11 @@ type Daemon struct {
 	mcpServer   *dmgnmcp.MCPServer
 	logger      *slog.Logger
 
-	ctx       context.Context
-	cancel    context.CancelFunc
-	nodeCtx   context.Context
-	nodeStop  context.CancelFunc
-	verbose   bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	nodeCtx  context.Context
+	nodeStop context.CancelFunc
+	verbose  bool
 }
 
 // New creates a new Daemon instance.
