@@ -249,7 +249,7 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 | 7 | **Planned** | — | — |
 | 8 | **Planned** | — | — |
 | 9 | **Planned** | — | — |
-| 10 | **Planned** | — | — |
+| 10 | **Complete** | 2026-04-10 | 2026-04-10 |
 
 ---
 
@@ -304,7 +304,7 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 **Plans:** 1 plan
 
 **Plan list:**
-- [ ] 10-01-PLAN.md — Distributed edge sync: proto + gossip + delta + MCP wiring
+- [x] 10-01-PLAN.md — Distributed edge sync: proto + gossip + delta + MCP wiring
 
 ---
 
