@@ -141,9 +141,16 @@ jobs:
             ext=".exe"
           fi
           FILENAME="dmgn-${GOOS}-${GOARCH}${ext}"
-          # Append ?name=filename to upload_url
-          UPLOAD_URL_WITH_NAME="${UPLOAD_URL}?name=${FILENAME}"
-          curl -sL "$UPLOAD_URL_WITH_NAME" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: application/octet-stream" --data-binary "@$FILENAME"
+          echo "Upload URL: $UPLOAD_URL"
+          echo "Filename: $FILENAME"
+          # The upload_url from create-release already ends with /assets
+          # We need to add ?name=filename
+          CURL_CMD="curl -sL -w '%{http_code}' -o upload_response.txt '$UPLOAD_URL?name=$FILENAME' -X POST --header 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' --header 'Content-Type: application/octet-stream' --data-binary '@$FILENAME'"
+          echo "Running: $CURL_CMD"
+          eval $CURL_CMD
+          HTTP_CODE=$(cat upload_response.txt)
+          echo "HTTP Response: $HTTP_CODE"
+          cat upload_response.txt
 
   docker:
     name: Build Docker Image
@@ -209,8 +216,13 @@ jobs:
         env:
           UPLOAD_URL: ${{ needs.release.outputs.upload_url }}
         run: |
-          UPLOAD_URL_WITH_NAME="${UPLOAD_URL}?name=checksums.txt"
-          curl -sL "$UPLOAD_URL_WITH_NAME" -X POST --header "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" --header "Content-Type: text/plain" --data-binary "@checksums.txt"
+          echo "Upload URL: $UPLOAD_URL"
+          CURL_CMD="curl -sL -w '%{http_code}' -o checksum_response.txt '$UPLOAD_URL?name=checksums.txt' -X POST --header 'Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' --header 'Content-Type: text/plain' --data-binary '@checksums.txt'"
+          echo "Running: $CURL_CMD"
+          eval $CURL_CMD
+          HTTP_CODE=$(cat checksum_response.txt)
+          echo "HTTP Response: $HTTP_CODE"
+          cat checksum_response.txt
 
   notify:
     name: Notify
