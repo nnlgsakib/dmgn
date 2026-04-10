@@ -23,6 +23,7 @@ func StartCmd() *cobra.Command {
 	var foreground bool
 	var daemonMode bool
 	var passFlag string
+	var mcpPort int
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -39,6 +40,11 @@ Use --foreground to run in the current terminal (useful for debugging).`,
 				return fmt.Errorf("failed to load config: %w", err)
 			}
 
+			// Override MCP IPC port if --port flag is set
+			if cmd.Flags().Changed("port") {
+				cfg.MCPIPCPort = mcpPort
+			}
+
 			// Path A: Daemon mode (child process, started by parent)
 			if daemonMode {
 				return runDaemonMode(cfg)
@@ -51,6 +57,7 @@ Use --foreground to run in the current terminal (useful for debugging).`,
 
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory")
 	cmd.Flags().StringVar(&passFlag, "pass", "", "Passphrase (skip interactive prompt)")
+	cmd.Flags().IntVar(&mcpPort, "port", 0, "Fixed MCP IPC port (0 = auto-assign)")
 	cmd.Flags().BoolVar(&foreground, "foreground", false, "Run daemon in foreground (debug mode)")
 	cmd.Flags().BoolVar(&daemonMode, "daemon-mode", false, "Internal: run as daemon child process")
 	cmd.Flags().MarkHidden("daemon-mode")
@@ -163,6 +170,11 @@ func runForeground(cfg *config.Config, keys *daemon.DerivedKeys) error {
 			fmt.Printf("  %s\n", addr)
 		}
 		fmt.Println()
+	}
+
+	// Show MCP IPC port
+	if portData, err := os.ReadFile(cfg.PortFile()); err == nil {
+		fmt.Printf("MCP IPC port: %s\n", strings.TrimSpace(string(portData)))
 	}
 
 	fmt.Println("DMGN daemon running in foreground. Press Ctrl+C to stop.")

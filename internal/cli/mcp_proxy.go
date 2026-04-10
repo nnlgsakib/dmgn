@@ -18,6 +18,7 @@ import (
 // the running DMGN daemon's MCP server.
 func MCPCmd() *cobra.Command {
 	var dataDir string
+	var portFlag int
 
 	cmd := &cobra.Command{
 		Use:   "mcp",
@@ -25,33 +26,41 @@ func MCPCmd() *cobra.Command {
 		Long: `Bridges stdin/stdout to the running DMGN daemon's MCP server.
 
 AI tools (Claude Desktop, Cline, Windsurf, etc.) should be configured to run:
-  dmgn mcp
+  dmgn mcp --port <port>
 
-All MCP JSON-RPC messages pass through transparently. The daemon must be
-running (start with: dmgn start).`,
+Use --port to specify the daemon's MCP IPC port directly.
+Without --port, the port is read from the daemon's port file in the data directory.
+
+The daemon must be running (start with: dmgn start).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(dataDir)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: failed to load config: %v\n", err)
-				os.Exit(1)
-			}
+			var port string
 
-			// Check if daemon is running
-			_, running := daemon.CheckDaemonRunning(cfg.PIDFile())
-			if !running {
-				fmt.Fprintf(os.Stderr, "DMGN daemon is not running. Start it with: dmgn start\n")
-				os.Exit(1)
-			}
+			if cmd.Flags().Changed("port") && portFlag > 0 {
+				// Use the explicitly provided port
+				port = fmt.Sprintf("%d", portFlag)
+			} else {
+				// Fall back to port file lookup
+				cfg, err := config.Load(dataDir)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: failed to load config: %v\n", err)
+					os.Exit(1)
+				}
 
-			// Read port file
-			portData, err := os.ReadFile(cfg.PortFile())
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: cannot read MCP port file: %v\n", err)
-				fmt.Fprintf(os.Stderr, "The daemon may not have started its MCP listener.\n")
-				os.Exit(1)
+				_, running := daemon.CheckDaemonRunning(cfg.PIDFile())
+				if !running {
+					fmt.Fprintf(os.Stderr, "DMGN daemon is not running. Start it with: dmgn start\n")
+					os.Exit(1)
+				}
+
+				portData, err := os.ReadFile(cfg.PortFile())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: cannot read MCP port file: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Hint: use --port <port> to specify the port directly.\n")
+					os.Exit(1)
+				}
+				port = strings.TrimSpace(string(portData))
 			}
-			port := strings.TrimSpace(string(portData))
 
 			// Connect to daemon's MCP IPC
 			conn, err := net.Dial("tcp", "127.0.0.1:"+port)
@@ -81,6 +90,7 @@ running (start with: dmgn start).`,
 	}
 
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory")
+	cmd.Flags().IntVar(&portFlag, "port", 0, "MCP IPC port (skip port file lookup)")
 
 	return cmd
 }
