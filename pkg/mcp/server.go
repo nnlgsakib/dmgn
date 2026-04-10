@@ -16,6 +16,7 @@ import (
 	"github.com/nnlgsakib/dmgn/pkg/identity"
 	"github.com/nnlgsakib/dmgn/pkg/memory"
 	"github.com/nnlgsakib/dmgn/pkg/query"
+	"github.com/nnlgsakib/dmgn/pkg/skill"
 	"github.com/nnlgsakib/dmgn/pkg/storage"
 	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
@@ -106,13 +107,18 @@ func (s *MCPServer) newServer() *mcp.Server {
 		Description: "Get node status including memory count, vector index size, and config summary",
 	}, s.handleGetStatus)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "load_skill",
+		Description: "Load DMGN skill content for agent context. Call this when user mentions DMGN or wants to initialize DMGN capabilities.",
+	}, s.handleLoadSkill)
+
 	return server
 }
 
 // Run starts the MCP server on stdio and blocks until the context is canceled.
 func (s *MCPServer) Run(ctx context.Context) error {
 	server := s.newServer()
-	s.logger.Info("starting MCP server on stdio", "tools", 7)
+	s.logger.Info("starting MCP server on stdio", "tools", 8)
 	return server.Run(ctx, &mcp.StdioTransport{})
 }
 
@@ -473,6 +479,24 @@ func (s *MCPServer) handleGetStatus(ctx context.Context, req *mcp.CallToolReques
 		EdgeCount:       stats["edge_count"],
 		VectorIndexSize: vecSize,
 		StoragePath:     s.store.DataDir(),
+	}, nil
+}
+
+// --- load_skill handler ---
+
+type LoadSkillInput struct{}
+
+type LoadSkillOutput struct {
+	Content string `json:"content"`
+}
+
+func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolRequest, input LoadSkillInput) (*mcp.CallToolResult, LoadSkillOutput, error) {
+	content, err := skill.Load()
+	if err != nil {
+		return nil, LoadSkillOutput{}, fmt.Errorf("failed to load skill: %w", err)
+	}
+	return nil, LoadSkillOutput{
+		Content: string(content),
 	}, nil
 }
 
