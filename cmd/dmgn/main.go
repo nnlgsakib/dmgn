@@ -25,11 +25,11 @@ and resilient to node failure.`,
 	rootCmd.AddCommand(cli.QueryCmd())
 	rootCmd.AddCommand(cli.StatusCmd())
 	rootCmd.AddCommand(cli.StartCmd())
-	rootCmd.AddCommand(cli.ServeCmd())
+	rootCmd.AddCommand(cli.StopCmd())
+	rootCmd.AddCommand(cli.MCPCmd())
 	rootCmd.AddCommand(cli.PeersCmd())
 	rootCmd.AddCommand(cli.ExportCmd())
 	rootCmd.AddCommand(cli.ImportCmd())
-	rootCmd.AddCommand(cli.MCPServeCmd())
 	rootCmd.AddCommand(cli.BackupCmd())
 	rootCmd.AddCommand(cli.RestoreCmd())
 
