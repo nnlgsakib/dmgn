@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -144,7 +145,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.persistMultiaddrs(peerID)
 
 	// Register peer connect/disconnect event logger
-	d.host.RegisterConnectionNotifier(&peerEventNotifier{logger: d.logger})
+	d.host.RegisterConnectionNotifier(newPeerEventNotifier(d.logger))
 
 	// 4. Reconstruct identity for subsystems that need it
 	id := d.keys.Identity()
@@ -562,23 +563,69 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 }
 
 // peerEventNotifier logs peer connect/disconnect events.
+// Tracks seen peers to avoid duplicate logging for multi-protocol connections.
 type peerEventNotifier struct {
 	logger *slog.Logger
+	seen   map[string]int // peerID -> connection count
+	mu     sync.Mutex
+}
+
+func newPeerEventNotifier(logger *slog.Logger) *peerEventNotifier {
+	return &peerEventNotifier{
+		logger: logger,
+		seen:   make(map[string]int),
+	}
 }
 
 func (n *peerEventNotifier) Connected(_ libnet.Network, conn libnet.Conn) {
-	n.logger.Info("peer connected",
-		"peer", conn.RemotePeer().String(),
-		"addr", conn.RemoteMultiaddr().String(),
-	)
-	fmt.Printf("Peer connected: %s (%s)\n", conn.RemotePeer(), conn.RemoteMultiaddr())
+	peerID := conn.RemotePeer().String()
+	addr := conn.RemoteMultiaddr().String()
+
+	n.mu.Lock()
+	n.seen[peerID]++
+	count := n.seen[peerID]
+	n.mu.Unlock()
+
+	// Only log on first connection to this peer
+	if count == 1 {
+		n.logger.Info("peer connected",
+			"peer", peerID,
+			"addr", addr,
+		)
+		fmt.Printf("Peer connected: %s (%s)\n", peerID, addr)
+	} else {
+		// Log at debug level for additional protocol connections
+		n.logger.Debug("peer additional connection",
+			"peer", peerID,
+			"addr", addr,
+			"connection_count", count,
+		)
+	}
 }
 
 func (n *peerEventNotifier) Disconnected(_ libnet.Network, conn libnet.Conn) {
-	n.logger.Info("peer disconnected",
-		"peer", conn.RemotePeer().String(),
-	)
-	fmt.Printf("Peer disconnected: %s\n", conn.RemotePeer())
+	peerID := conn.RemotePeer().String()
+
+	n.mu.Lock()
+	n.seen[peerID]--
+	count := n.seen[peerID]
+	if count <= 0 {
+		delete(n.seen, peerID)
+	}
+	n.mu.Unlock()
+
+	// Only log disconnect when last connection closes
+	if count <= 0 {
+		n.logger.Info("peer disconnected",
+			"peer", peerID,
+		)
+		fmt.Printf("Peer disconnected: %s\n", peerID)
+	} else {
+		n.logger.Debug("peer connection closed",
+			"peer", peerID,
+			"remaining_connections", count,
+		)
+	}
 }
 
 func (n *peerEventNotifier) Listen(libnet.Network, multiaddr.Multiaddr)      {}
