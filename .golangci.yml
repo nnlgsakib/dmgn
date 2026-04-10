@@ -38,8 +38,3 @@ issues:
   max-same-issues: 0
   exclude-files:
     - "proto/dmgn/v1/generate.go"
-
-output:
-  formats:
-    - format: colored-line-number
-      path-prefix: ""
