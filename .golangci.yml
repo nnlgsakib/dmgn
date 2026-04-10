@@ -36,10 +36,10 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-files:
+    - "proto/dmgn/v1/generate.go"
 
 output:
   formats:
     - format: colored-line-number
       path-prefix: ""
-  print-issued-lines: true
-  print-linter-name: true
