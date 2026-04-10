@@ -9,20 +9,19 @@ proto:
 
 # Build the binary
 build:
-	CGO_ENABLED=1 go build -ldflags="-s -w" -o dmgn ./cmd/dmgn
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o dmgn ./cmd/dmgn
 
 # Build for Linux
 build-linux:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-linux-amd64 ./cmd/dmgn
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-linux-amd64 ./cmd/dmgn
 
 # Build for macOS
 build-darwin:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-darwin-amd64 ./cmd/dmgn
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dmgn-darwin-arm64 ./cmd/dmgn
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-darwin-amd64 ./cmd/dmgn
 
 # Build for Windows
 build-windows:
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-windows-amd64.exe ./cmd/dmgn
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dmgn-windows-amd64.exe ./cmd/dmgn
 
 # Build all platforms
 build-all: build-linux build-darwin build-windows
@@ -66,8 +65,7 @@ generate:
 release:
 	@echo "Creating release builds..."
 	@mkdir -p release
-	@CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-linux-amd64 ./cmd/dmgn
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-darwin-amd64 ./cmd/dmgn
-	@CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-darwin-arm64 ./cmd/dmgn
-	@CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-windows-amd64.exe ./cmd/dmgn
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-linux-amd64 ./cmd/dmgn
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-darwin-amd64 ./cmd/dmgn
+	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git describe --tags)" -o release/dmgn-windows-amd64.exe ./cmd/dmgn
 	@echo "Release builds created in release/ directory"
