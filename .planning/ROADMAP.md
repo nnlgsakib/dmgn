@@ -308,4 +308,33 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 
 ---
 
-*Last updated: 2026-04-10 — Added Phase 10 for distributed graph sync*
+## Phase 11: Hybrid Link Processing
+
+**Goal:** Add automatic link/edge generation when memories are added. System automatically creates knowledge graph edges (via embedding similarity + time clustering) while preserving existing manual `link_memories` tool for AI agent explicit linking.
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 10 (edge gossip infrastructure)
+
+**Success Criteria:**
+1. Auto-linking happens immediately on add_memory — system scans and links to related memories
+2. Hybrid algorithm combines embedding similarity + time clustering
+3. Configurable thresholds (similarity default 0.7, time window default 60 minutes)
+4. Edge weight = similarity score preserves confidence signal
+5. Auto-generated edges broadcast to network via gossip
+6. Manual link_memories tool unchanged for AI agent explicit linking
+
+**Key Components:**
+- Config fields: EnableAutoLink, AutoLinkSimilarityThreshold, AutoLinkTimeWindowMinutes
+- Auto-linking in handleAddMemory hook point
+- Edge type field distinguishes "auto" vs "manual" edges
+- Time clustering for memories within configured time window
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [ ] 11-01-PLAN.md — Hybrid link processing: config + auto-linking + MCP integration
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 11 for hybrid link processing*
