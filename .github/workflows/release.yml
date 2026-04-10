@@ -54,7 +54,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v2
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -100,7 +100,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
+        goarch: [amd64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -130,7 +130,7 @@ jobs:
           ls -la "$FILENAME"
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v2
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -197,7 +197,7 @@ jobs:
           cat checksums.txt
 
       - name: Upload Checksums
-        uses: actions/upload-release-asset@v2
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
