@@ -29,8 +29,9 @@ type MCPServer struct {
 	cryptoEng   *crypto.Engine
 	identity    *identity.Identity
 	config      *config.Config
-	logger      *slog.Logger
-	onBroadcast func(mem *memory.Memory)
+	logger          *slog.Logger
+	onBroadcast     func(mem *memory.Memory)
+	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -62,6 +63,12 @@ func (s *MCPServer) SetLogger(l *slog.Logger) {
 // to broadcast it to the gossip network and track its sequence.
 func (s *MCPServer) SetBroadcaster(fn func(mem *memory.Memory)) {
 	s.onBroadcast = fn
+}
+
+// SetEdgeBroadcaster sets the callback invoked after an edge is created,
+// to broadcast it to the gossip network for distributed graph sync.
+func (s *MCPServer) SetEdgeBroadcaster(fn func(fromID, toID string, weight float32, edgeType string)) {
+	s.edgeBroadcaster = fn
 }
 
 // newServer creates a configured MCP server instance with all tools registered.
@@ -394,6 +401,11 @@ func (s *MCPServer) handleLinkMemories(ctx context.Context, req *mcp.CallToolReq
 	// Also add to in-memory graph
 	graph := s.store.GetGraph()
 	_ = graph.AddEdge(input.FromID, input.ToID, input.Weight, input.EdgeType)
+
+	// Broadcast edge to network
+	if s.edgeBroadcaster != nil {
+		s.edgeBroadcaster(input.FromID, input.ToID, input.Weight, input.EdgeType)
+	}
 
 	return nil, LinkMemoriesOutput{
 		FromID:   input.FromID,
