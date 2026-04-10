@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -375,6 +376,8 @@ func (d *Daemon) writePortFile(port int) error {
 
 // persistMultiaddrs builds full multiaddresses (/ip4/.../tcp/.../p2p/<peerID>)
 // and writes them back to config.json so they can be shared as bootnodes.
+// It also persists the actual bound listen address so the same port is reused
+// on restart (important when the default port is 0 / auto-assign).
 func (d *Daemon) persistMultiaddrs(peerID string) {
 	addrs := d.host.Addrs()
 	fullAddrs := make([]string, 0, len(addrs))
@@ -382,10 +385,28 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 		fullAddrs = append(fullAddrs, fmt.Sprintf("%s/p2p/%s", addr.String(), peerID))
 	}
 
+	// Extract the actual TCP port from bound addresses and update ListenAddr
+	// so the same port is reused on next restart.
+	for _, addr := range addrs {
+		parts := strings.Split(addr.String(), "/")
+		for i, p := range parts {
+			if p == "tcp" && i+1 < len(parts) {
+				d.cfg.ListenAddr = fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1])
+				break
+			}
+		}
+		if d.cfg.ListenAddr != "/ip4/0.0.0.0/tcp/0" {
+			break
+		}
+	}
+
 	d.cfg.NodeMultiaddrs = fullAddrs
 	if err := d.cfg.Save(); err != nil {
 		d.logger.Error("failed to persist multiaddresses to config", "err", err)
 	} else {
-		d.logger.Info("node multiaddresses persisted to config", "addrs", fullAddrs)
+		d.logger.Info("node multiaddresses persisted to config",
+			"addrs", fullAddrs,
+			"listen_addr", d.cfg.ListenAddr,
+		)
 	}
 }

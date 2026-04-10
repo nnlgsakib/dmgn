@@ -40,7 +40,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		DataDir:           DefaultDataDir(),
-		ListenAddr:        "/ip4/0.0.0.0/tcp/4001",
+		ListenAddr:        "/ip4/0.0.0.0/tcp/0",
 		APIPort:           8080,
 		MaxRecentMemories: 1000,
 		LogLevel:          "info",
