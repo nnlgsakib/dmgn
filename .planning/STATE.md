@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 07
-last_updated: "2026-04-10T03:31:53.496Z"
+status: Phase 8 ready for planning
+last_updated: "2026-04-10T04:55:00.000Z"
 progress:
-  total_phases: 7
-  completed_phases: 5
+  total_phases: 8
+  completed_phases: 6
   total_plans: 22
   completed_plans: 14
   percent: 64
@@ -20,7 +20,7 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 
 **Core value:** User owns their identity and memory data that persists across devices and time, with no central server or third-party control.
 
-**Current focus:** Phase 07 — cli-enhancements
+**Current focus:** Phase 08 — Networking Enhancements (QUIC transport, NAT traversal)
 
 ## Phase Progress
 
@@ -32,6 +32,8 @@ See: `.planning/PROJECT.md` (updated 2025-04-09)
 | 4: Distributed Storage | **Complete** | Shamir sharding, DHT-based distribution, store/fetch protocols |
 | 5: Query & Sync | **Complete** | Vector index, hybrid scoring, GossipSub, delta sync, cross-peer query |
 | 6: MCP & Polish | **Complete** | MCP server (7 tools), OTel, backup/restore, peer reputation, docs |
+| 7: Daemon Architecture | **Complete** | Background daemon, integrated MCP, start/stop commands |
+| 8: Networking Enhancements | **Planned** | QUIC transport, NAT traversal (Circuit Relay v2, hole punching, TURN) |
 
 ## Active Work
 
@@ -71,6 +73,8 @@ Phase 6 Completed Plans:
 16. **Local-only MCP by default**: MCP server works offline-first, `--network` flag opts into P2P features.
 17. **Weighted reputation scoring**: `0.3*uptime + 0.3*latency + 0.2*sync + 0.2*availability` with exponential decay toward neutral.
 18. **Protobuf migration (hybrid)**: Wire (store/fetch, gossip, delta) = protobuf, disk = BadgerDB native, memory = hybrid (protobuf replication + JSON local), API = JSON (required)
+19. **QUIC transport**: Add QUIC v1 alongside TCP for improved latency and NAT traversal support
+20. **NAT traversal**: Enable Circuit Relay v2, direct hole punching, and TURN fallback for nodes behind NAT
 
 ## Blockers
 
@@ -84,6 +88,7 @@ None.
 
 ## Recent Changes
 
+- 2026-04-10: Phase 8 context captured — QUIC transport, NAT traversal (Circuit Relay v2, hole punching, TURN)
 - 2026-04-09: Phase 01 protobuf migration verified — all 4 protocols at v2.0.0, JSON eliminated from wire
 - 2026-04-09: Phase 1 context captured — Protobuf migration decisions (wire format, gossip, disk, memory model)
 - 2026-04-09: Phase 6 complete — 4 plans executed, 28 new tests, 13 test packages all passing
