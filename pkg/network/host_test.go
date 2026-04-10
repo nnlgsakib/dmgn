@@ -226,3 +226,163 @@ func TestTwoHostsConnect(t *testing.T) {
 		t.Errorf("h1 peer ID mismatch: got %s, want %s", peers1[0].ID, h2.ID().String())
 	}
 }
+
+func TestQUICListenAddr(t *testing.T) {
+	id := createTestIdentity(t)
+	key, _ := DeriveLibp2pKey(id)
+
+	h, err := NewHost(HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/tcp/0", "/ip4/127.0.0.1/udp/0/quic-v1"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key,
+	})
+	if err != nil {
+		t.Fatalf("NewHost failed: %v", err)
+	}
+	defer h.Stop()
+
+	addrs := h.Addrs()
+	hasQUIC := false
+	hasTCP := false
+	for _, addr := range addrs {
+		s := addr.String()
+		if contains(s, "quic-v1") {
+			hasQUIC = true
+		}
+		if contains(s, "tcp") {
+			hasTCP = true
+		}
+	}
+
+	if !hasTCP {
+		t.Error("expected TCP listen address")
+	}
+	if !hasQUIC {
+		t.Error("expected QUIC listen address")
+	}
+}
+
+func TestHostWithNATOptions(t *testing.T) {
+	id := createTestIdentity(t)
+	key, _ := DeriveLibp2pKey(id)
+
+	h, err := NewHost(HostConfig{
+		ListenAddrs:        []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:        "",
+		MaxPeersLow:        5,
+		MaxPeersHigh:       10,
+		PrivateKey:         key,
+		EnableHolePunching: true,
+		EnableRelayService: true,
+	})
+	if err != nil {
+		t.Fatalf("NewHost with NAT options failed: %v", err)
+	}
+	defer h.Stop()
+
+	if h.ID() == "" {
+		t.Error("host should have a non-empty peer ID")
+	}
+}
+
+func TestTwoHostsConnectQUIC(t *testing.T) {
+	id1 := createTestIdentity(t)
+	key1, _ := DeriveLibp2pKey(id1)
+	id2 := createTestIdentity(t)
+	key2, _ := DeriveLibp2pKey(id2)
+
+	h1, err := NewHost(HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/udp/0/quic-v1"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key1,
+	})
+	if err != nil {
+		t.Fatalf("NewHost h1 QUIC failed: %v", err)
+	}
+	defer h1.Stop()
+
+	h2, err := NewHost(HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/udp/0/quic-v1"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key2,
+	})
+	if err != nil {
+		t.Fatalf("NewHost h2 QUIC failed: %v", err)
+	}
+	defer h2.Stop()
+
+	h1Info := peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}
+	if err := h2.LibP2PHost().Connect(context.Background(), h1Info); err != nil {
+		t.Fatalf("failed to connect h2 to h1 over QUIC: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	if h1.PeerCount() != 1 {
+		t.Errorf("h1 expected 1 peer over QUIC, got %d", h1.PeerCount())
+	}
+	if h2.PeerCount() != 1 {
+		t.Errorf("h2 expected 1 peer over QUIC, got %d", h2.PeerCount())
+	}
+}
+
+func TestHostWithGater_BlocksPeer(t *testing.T) {
+	id1 := createTestIdentity(t)
+	key1, _ := DeriveLibp2pKey(id1)
+	id2 := createTestIdentity(t)
+	key2, _ := DeriveLibp2pKey(id2)
+
+	h1, err := NewHost(HostConfig{
+		ListenAddrs:  []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:  "",
+		MaxPeersLow:  5,
+		MaxPeersHigh: 10,
+		PrivateKey:   key1,
+	})
+	if err != nil {
+		t.Fatalf("NewHost h1 failed: %v", err)
+	}
+	defer h1.Stop()
+
+	// Create h2 with gater that blocks h1
+	gater := NewReputationGater(nil, []string{h1.ID().String()}, nil, 0.2)
+	h2, err := NewHost(HostConfig{
+		ListenAddrs:     []string{"/ip4/127.0.0.1/tcp/0"},
+		MDNSService:     "",
+		MaxPeersLow:     5,
+		MaxPeersHigh:    10,
+		PrivateKey:      key2,
+		ConnectionGater: gater,
+	})
+	if err != nil {
+		t.Fatalf("NewHost h2 failed: %v", err)
+	}
+	defer h2.Stop()
+
+	// h2 trying to dial h1 should fail because h1 is blocked
+	h1Info := peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}
+	err = h2.LibP2PHost().Connect(context.Background(), h1Info)
+	if err == nil {
+		t.Error("expected connection to blocked peer to fail")
+	}
+}
+
+// contains checks if a string contains a substring.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

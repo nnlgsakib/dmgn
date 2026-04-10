@@ -8,12 +8,13 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	libconnmgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	"github.com/multiformats/go-multiaddr"
 
 	"github.com/nnlgsakib/dmgn/pkg/identity"
@@ -21,22 +22,28 @@ import (
 
 // HostConfig holds configuration for creating a libp2p host.
 type HostConfig struct {
-	ListenAddrs    []string
-	BootstrapPeers []string
-	MDNSService    string
-	MaxPeersLow    int
-	MaxPeersHigh   int
-	PrivateKey     crypto.PrivKey
+	ListenAddrs        []string
+	BootstrapPeers     []string
+	MDNSService        string
+	MaxPeersLow        int
+	MaxPeersHigh       int
+	PrivateKey         crypto.PrivKey
+	EnableHolePunching bool
+	EnableRelayService bool
+	RelayServers       []string
+	ConnectionGater    connmgr.ConnectionGater
 }
 
 // Host wraps a libp2p host with DHT and mDNS discovery.
 type Host struct {
-	host        host.Host
-	dht         *dht.IpfsDHT
-	mdnsService mdns.Service
-	ctx         context.Context
-	cancel      context.CancelFunc
-	cfg         HostConfig
+	host         host.Host
+	dht          *dht.IpfsDHT
+	mdnsService  mdns.Service
+	ctx          context.Context
+	cancel       context.CancelFunc
+	cfg          HostConfig
+	storeLimiter *PeerRateLimiter
+	fetchLimiter *PeerRateLimiter
 }
 
 // DeriveLibp2pKey derives a libp2p ed25519 private key from a DMGN identity
@@ -61,10 +68,10 @@ func DeriveLibp2pKey(id *identity.Identity) (crypto.PrivKey, error) {
 func NewHost(cfg HostConfig) (*Host, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cm, err := connmgr.NewConnManager(
+	cm, err := libconnmgr.NewConnManager(
 		cfg.MaxPeersLow,
 		cfg.MaxPeersHigh,
-		connmgr.WithGracePeriod(time.Minute),
+		libconnmgr.WithGracePeriod(time.Minute),
 	)
 	if err != nil {
 		cancel()
@@ -80,6 +87,25 @@ func NewHost(cfg HostConfig) (*Host, error) {
 		libp2p.DefaultTransports,
 		libp2p.DefaultSecurity,
 		libp2p.DefaultMuxers,
+	}
+
+	if cfg.EnableRelayService {
+		opts = append(opts, libp2p.EnableRelayService())
+	}
+
+	if cfg.EnableHolePunching {
+		opts = append(opts, libp2p.EnableHolePunching())
+	}
+
+	if len(cfg.RelayServers) > 0 {
+		relayInfos := parseRelayAddrs(cfg.RelayServers)
+		if len(relayInfos) > 0 {
+			opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(relayInfos))
+		}
+	}
+
+	if cfg.ConnectionGater != nil {
+		opts = append(opts, libp2p.ConnectionGater(cfg.ConnectionGater))
 	}
 
 	h, err := libp2p.New(opts...)
@@ -156,4 +182,27 @@ func (h *Host) RegisterConnectionNotifier(n libnet.Notifiee) {
 // DHT returns the Kademlia DHT instance for provider operations.
 func (h *Host) DHT() *dht.IpfsDHT {
 	return h.dht
+}
+
+// SetRateLimiters sets per-peer rate limiters for protocol handlers.
+func (h *Host) SetRateLimiters(storeLimiter, fetchLimiter *PeerRateLimiter) {
+	h.storeLimiter = storeLimiter
+	h.fetchLimiter = fetchLimiter
+}
+
+// parseRelayAddrs parses multiaddr strings into peer.AddrInfo for relay configuration.
+func parseRelayAddrs(addrs []string) []peer.AddrInfo {
+	var infos []peer.AddrInfo
+	for _, s := range addrs {
+		ma, err := multiaddr.NewMultiaddr(s)
+		if err != nil {
+			continue
+		}
+		info, err := peer.AddrInfoFromP2pAddr(ma)
+		if err != nil {
+			continue
+		}
+		infos = append(infos, *info)
+	}
+	return infos
 }
