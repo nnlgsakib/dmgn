@@ -17,6 +17,8 @@
 | 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
 | 8 | [Networking Enhancements](#phase-8-networking-enhancements) | QUIC transport, NAT traversal, networking security | QUIC v1, Relay v2, hole punching, connection gater, resource mgr | 4 |
 | 10 | [Graph Sync](#phase-10-distributed-graph-sync) | Distribute knowledge graph edges across all peers | Edge gossip, edge delta sync, edge proto, MCP wiring | 0 |
+| 11 | [Hybrid Link Processing](#phase-11-hybrid-link-processing) | Auto-linking memories on add_memory | Config, auto-linking function, MCP integration | 0 |
+| 12 | [Knowledge Graph (DAG)](#phase-12-knowledge-graph-dag) | Generic DAG for any entity relationship | Node, Edge, Graph, builder, queries | 0 |
 
 ---
 
@@ -251,7 +253,7 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 | 9 | **Planned** | — | — |
 | 10 | **Complete** | 2026-04-10 | 2026-04-10 |
 | 11 | **Complete** | 2026-04-10 | 2026-04-10 |
-| 12 | **Planned** | — | — |
+| 12 | **Complete** | 2026-04-10 | 2026-04-10 |
 
 ---
 
