@@ -54,6 +54,7 @@ DMGN gives you what you lack: **persistent, searchable, encrypted memory that su
 | **Offline-first** | Works without internet. Syncs when connectivity returns. Never blocks your workflow |
 | **Time-aware context** | Query by time range. Know what happened yesterday, last week, or 6 months ago |
 | **Type classification** | Tag memories as `text`, `conversation`, `observation`, or `document` for structured retrieval |
+| **Knowledge Graph** | Auto-generated DAG of entities with typed relationships (CREATES, USES, BUILT_BY, etc). Synced across peers via gossip. |
 
 ---
 
@@ -106,7 +107,7 @@ dmgn query --recent --limit 20
 
 ---
 
-## The 7 Tools — Complete Reference
+## The 10 Tools — Complete Reference
 
 ### 1. `add_memory` — Store Something You Must Not Forget
 
@@ -276,6 +277,76 @@ Check how much you remember. Useful for diagnostics and self-awareness.
 
 ---
 
+### 8. `add_node` — Add Entity to Knowledge Graph
+
+Add any entity (person, concept, file, function, etc) to the knowledge graph. **Automatically called when you add_memory** - entities are extracted from content.
+
+```json
+{
+  "id": "nlg",
+  "type": "person",
+  "label": "NLG",
+  "meta": {"role": "developer"}
+}
+```
+
+**Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | no | Unique node ID (auto-generated if not provided) |
+| `type` | string | **yes** | Entity type: `person`, `concept`, `file`, `function`, `tool`, `project`, etc |
+| `label` | string | **yes** | Display name |
+| `meta` | map | no | Extra metadata |
+
+---
+
+### 9. `add_edge` — Connect Knowledge Graph Entities
+
+Link two entities with a typed relationship.
+
+```json
+{
+  "from": "programmer",
+  "to": "nlg",
+  "type": "CREATES",
+  "weight": 1.0
+}
+```
+
+**Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `from` | string | **yes** | Source node ID |
+| `to` | string | **yes** | Target node ID |
+| `type` | string | **yes** | Relationship: `CREATES`, `USES`, `BUILT_BY`, `PART_OF`, `RELATED_TO`, `DEPENDS_ON`, `CALLS`, `CONTAINS` |
+| `weight` | float | no | Edge weight 0.0–1.0 (default: 1.0) |
+
+---
+
+### 10. `query_graph` — Query Knowledge Graph
+
+Get incoming/outgoing edges for any node.
+
+```json
+{
+  "node_id": "nlg",
+  "direction": "incoming"
+}
+```
+
+**Parameters:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `node_id` | string | **yes** | Node to query |
+| `direction` | string | no | `incoming` (edges TO node), `outgoing` (edges FROM node), empty for both |
+| `edge_type` | string | no | Filter by edge type |
+| `max_depth` | int | no | Max traversal depth (default: 3) |
+
+---
+
 ## REST API Equivalents
 
 For HTTP-based agents. Base URL: `http://localhost:8080`. Header: `Authorization: Bearer <key>`.
@@ -286,6 +357,9 @@ For HTTP-based agents. Base URL: `http://localhost:8080`. Header: `Authorization
 | Query | `GET` | `/query?q=search+text&limit=10&embedding=[...]` | — |
 | Status | `GET` | `/status` | — |
 | Peers | `GET` | `/peers` | — |
+| Add node | `POST` | `/kg/node` | `{"id": "...", "type": "...", "label": "..."}` |
+| Add edge | `POST` | `/kg/edge` | `{"from": "...", "to": "...", "type": "..."}` |
+| Query graph | `GET` | `/kg/graph?node_id=...&direction=...` | — |
 
 ---
 
@@ -331,6 +405,39 @@ Use consistent metadata keys across sessions for reliable retrieval:
 | `conversation` | Dialog excerpts, key exchanges, Q&A pairs |
 | `observation` | User preferences, behavioral patterns, inferred facts |
 | `document` | Processed document summaries, code reviews, spec digests |
+
+---
+
+---
+
+## Knowledge Graph — Auto-Generated
+
+DMGN automatically builds a knowledge graph when you add memories. This gives you **relationship-based linking** - not just embedding similarity.
+
+### How It Works
+When you call `add_memory`:
+1. Entities are extracted from memory content (person names, concepts, topics)
+2. Nodes are created in the knowledge graph automatically
+3. Memory is linked to extracted entities
+4. Nodes are broadcast to peers via P2P gossip
+
+### Example
+```bash
+add_memory({content: "NLG is a programmer who builds AI assistants"})
+```
+
+Automatically creates:
+- **Nodes**: "NLG" (person), "programmer" (entity), "AI" (concept), "assistants" (concept)
+- **Edges**: memory → NLG (CONTAINS), memory → programmer (CONTAINS), etc.
+
+### Query the Graph
+```bash
+# What entities does this memory contain?
+query_graph({node_id: "mem:abc123:NLG", direction: "incoming"})
+
+# What depends on NLG?
+query_graph({node_id: "nlg", direction: "outgoing"})
+```
 
 ---
 
