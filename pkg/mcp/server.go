@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"time"
@@ -55,8 +56,8 @@ func (s *MCPServer) SetLogger(l *slog.Logger) {
 	s.logger = l
 }
 
-// Run starts the MCP server on stdio and blocks until the context is canceled.
-func (s *MCPServer) Run(ctx context.Context) error {
+// newServer creates a configured MCP server instance with all tools registered.
+func (s *MCPServer) newServer() *mcp.Server {
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "dmgn", Version: "0.1.0"},
 		nil,
@@ -98,18 +99,35 @@ func (s *MCPServer) Run(ctx context.Context) error {
 		Description: "Get node status including memory count, vector index size, and config summary",
 	}, s.handleGetStatus)
 
+	return server
+}
+
+// Run starts the MCP server on stdio and blocks until the context is canceled.
+func (s *MCPServer) Run(ctx context.Context) error {
+	server := s.newServer()
 	s.logger.Info("starting MCP server on stdio", "tools", 7)
 	return server.Run(ctx, &mcp.StdioTransport{})
+}
+
+// RunOnConnection starts the MCP server over an arbitrary io.ReadWriteCloser.
+// Used by the daemon to serve MCP over TCP IPC connections.
+func (s *MCPServer) RunOnConnection(ctx context.Context, conn io.ReadWriteCloser) error {
+	server := s.newServer()
+	transport := &mcp.IOTransport{
+		Reader: conn,
+		Writer: conn,
+	}
+	return server.Run(ctx, transport)
 }
 
 // --- Tool Input/Output Structs ---
 
 type AddMemoryInput struct {
-	Content   string            `json:"content" jsonschema:"description=The text content to store"`
-	Type      string            `json:"type,omitempty" jsonschema:"description=Memory type: text conversation observation document,enum=text,enum=conversation,enum=observation,enum=document"`
-	Links     []string          `json:"links,omitempty" jsonschema:"description=IDs of related memories to link to"`
-	Embedding []float32         `json:"embedding,omitempty" jsonschema:"description=Pre-computed embedding vector (float32 array)"`
-	Metadata  map[string]string `json:"metadata,omitempty" jsonschema:"description=Key-value metadata pairs"`
+	Content   string            `json:"content"`
+	Type      string            `json:"type,omitempty"`
+	Links     []string          `json:"links,omitempty"`
+	Embedding []float32         `json:"embedding,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
 type AddMemoryOutput struct {
@@ -119,13 +137,13 @@ type AddMemoryOutput struct {
 }
 
 type QueryMemoryInput struct {
-	Query          string    `json:"query,omitempty" jsonschema:"description=Text search query"`
-	Embedding      []float32 `json:"embedding,omitempty" jsonschema:"description=Embedding vector for semantic search"`
-	Limit          int       `json:"limit,omitempty" jsonschema:"description=Max results to return (default 10)"`
-	IncludeContent bool      `json:"include_content,omitempty" jsonschema:"description=If true return full decrypted content instead of snippets"`
-	FilterType     string    `json:"filter_type,omitempty" jsonschema:"description=Filter by memory type"`
-	FilterAfter    int64     `json:"filter_after,omitempty" jsonschema:"description=Filter memories after this Unix nano timestamp"`
-	FilterBefore   int64     `json:"filter_before,omitempty" jsonschema:"description=Filter memories before this Unix nano timestamp"`
+	Query          string    `json:"query,omitempty"`
+	Embedding      []float32 `json:"embedding,omitempty"`
+	Limit          int       `json:"limit,omitempty"`
+	IncludeContent bool      `json:"include_content,omitempty"`
+	FilterType     string    `json:"filter_type,omitempty"`
+	FilterAfter    int64     `json:"filter_after,omitempty"`
+	FilterBefore   int64     `json:"filter_before,omitempty"`
 }
 
 type QueryMemoryOutput struct {
@@ -134,22 +152,22 @@ type QueryMemoryOutput struct {
 }
 
 type QueryResultItem struct {
-	MemoryID  string `json:"memory_id"`
+	MemoryID  string  `json:"memory_id"`
 	Score     float64 `json:"score"`
-	Type      string `json:"type"`
-	Timestamp int64  `json:"timestamp"`
-	Content   string `json:"content,omitempty"`
-	Snippet   string `json:"snippet,omitempty"`
+	Type      string  `json:"type"`
+	Timestamp int64   `json:"timestamp"`
+	Content   string  `json:"content,omitempty"`
+	Snippet   string  `json:"snippet,omitempty"`
 }
 
 type GetContextInput struct {
-	Limit int `json:"limit,omitempty" jsonschema:"description=Number of recent memories to return (default 10)"`
+	Limit int `json:"limit,omitempty"`
 }
 
 type GetContextOutput struct {
-	Memories         []ContextMemory `json:"memories"`
-	Count            int             `json:"count"`
-	ContextWindowHint string         `json:"context_window_hint"`
+	Memories          []ContextMemory `json:"memories"`
+	Count             int             `json:"count"`
+	ContextWindowHint string          `json:"context_window_hint"`
 }
 
 type ContextMemory struct {
@@ -162,10 +180,10 @@ type ContextMemory struct {
 }
 
 type LinkMemoriesInput struct {
-	FromID   string  `json:"from_id" jsonschema:"description=Source memory ID"`
-	ToID     string  `json:"to_id" jsonschema:"description=Target memory ID"`
-	Weight   float32 `json:"weight,omitempty" jsonschema:"description=Edge weight (default 1.0)"`
-	EdgeType string  `json:"edge_type,omitempty" jsonschema:"description=Type of relationship (default: related)"`
+	FromID   string  `json:"from_id"`
+	ToID     string  `json:"to_id"`
+	Weight   float32 `json:"weight,omitempty"`
+	EdgeType string  `json:"edge_type,omitempty"`
 }
 
 type LinkMemoriesOutput struct {
@@ -176,8 +194,8 @@ type LinkMemoriesOutput struct {
 }
 
 type GetGraphInput struct {
-	StartID  string `json:"start_id" jsonschema:"description=Starting memory ID for graph traversal"`
-	MaxDepth int    `json:"max_depth,omitempty" jsonschema:"description=Maximum traversal depth (default 3)"`
+	StartID  string `json:"start_id"`
+	MaxDepth int    `json:"max_depth,omitempty"`
 }
 
 type GetGraphOutput struct {
@@ -202,7 +220,7 @@ type GraphEdge struct {
 }
 
 type DeleteMemoryInput struct {
-	ID string `json:"id" jsonschema:"description=Memory ID to delete"`
+	ID string `json:"id"`
 }
 
 type DeleteMemoryOutput struct {

@@ -340,9 +340,10 @@ func (d *Daemon) handleMCPConnection(conn net.Conn) {
 	connCtx, connCancel := context.WithCancel(d.ctx)
 	defer connCancel()
 
-	// TODO: Wire to mcpServer.RunOnConnection once Plan 03 adds it.
-	// For now, the connection is accepted but MCP handling is a placeholder.
-	_ = connCtx
+	if err := d.mcpServer.RunOnConnection(connCtx, conn); err != nil {
+		d.logger.Error("MCP IPC session error", "remote", conn.RemoteAddr(), "err", err)
+	}
+
 	d.logger.Info("MCP IPC connection closed", "remote", conn.RemoteAddr())
 }
 
