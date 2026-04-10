@@ -2,7 +2,7 @@
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git make protoc
+RUN apk add --no-cache git make protoc gcc musl-dev linux-headers
 
 WORKDIR /app
 
@@ -13,8 +13,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
-RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty)" -o dmgn ./cmd/dmgn
+# Build the binary with CGO_ENABLED=1 for native cryptography
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty)" -o dmgn ./cmd/dmgn
 
 # Final stage
 FROM alpine:3.20

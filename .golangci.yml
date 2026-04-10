@@ -38,6 +38,8 @@ issues:
   max-same-issues: 0
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
+      path-prefix: ""
   print-issued-lines: true
   print-linter-name: true
