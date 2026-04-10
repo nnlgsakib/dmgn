@@ -16,6 +16,7 @@
 | 6 | [MCP & Polish](#phase-6-mcp--polish) | Full MCP support and production readiness | MCP tools, metrics, docs | 5 |
 | 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
 | 8 | [Networking Enhancements](#phase-8-networking-enhancements) | QUIC transport, NAT traversal, networking security | QUIC v1, Relay v2, hole punching, connection gater, resource mgr | 4 |
+| 10 | [Graph Sync](#phase-10-distributed-graph-sync) | Distribute knowledge graph edges across all peers | Edge gossip, edge delta sync, edge proto, MCP wiring | 0 |
 
 ---
 
@@ -248,6 +249,7 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 | 7 | **Planned** | — | — |
 | 8 | **Planned** | — | — |
 | 9 | **Planned** | — | — |
+| 10 | **Planned** | — | — |
 
 ---
 
@@ -277,4 +279,33 @@ Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 
 ---
 
-*Last updated: 2026-04-10 — Added Phase 9 for skill-loader feature*
+## Phase 10: Distributed Graph Sync
+
+**Goal:** Distribute knowledge graph edges (relationships between memories) across all peers — turn DMGN from isolated memory silos into a true distributed knowledge graph
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 5 (gossip + delta sync foundation)
+
+**Success Criteria:**
+1. Edge created via `link_memories` on peer A appears on peer B within one gossip cycle
+2. Delta sync delivers edges missed during disconnection
+3. Edge persists across daemon restarts on all peers
+4. Proto changes are backward compatible (old peers ignore new fields)
+5. Full test suite passes with zero regressions
+
+**Key Components:**
+- Edge proto message + extended GossipMessage/SyncRequest/SyncResponse
+- Edge gossip broadcast (`type="new_edge"`)
+- Edge delta sync with independent version vector tracking
+- Edge broadcaster wired into MCP `link_memories` handler
+- Orphan edge buffering (edge arrives before referenced memories)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [ ] 10-01-PLAN.md — Distributed edge sync: proto + gossip + delta + MCP wiring
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 10 for distributed graph sync*
