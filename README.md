@@ -61,7 +61,9 @@ User owns their identity and memory data that persists across devices and time, 
 | 5 | ✅ Complete | Query & Sync — Vector search, gossip sync, delta sync |
 | 6 | ✅ Complete | MCP & Polish — MCP protocol, observability, backup, docs |
 | 7 | ✅ Complete | Daemon Architecture — Background daemon, CLI restructure, MCP IPC |
-| 8 | 🔄 In Progress | CLI Enhancements — Query improvements, status, export/import |
+| 8 | 🔄 In Progress | Networking Enhancements — QUIC transport, NAT traversal (Circuit Relay v2, hole punching, TURN) |
+| 9 | ✅ Complete | Skill Loader — Conversational skill-trigger system |
+| 10 | ✅ Complete | Graph Sync — Distributed edge sync via gossip |
 
 ## Installation
 
@@ -420,11 +422,19 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full setup guide.
 - Derived keys passed securely via environment variable
 - Protobuf v2.0.0 migration for wire protocols
 
-### Phase 8: CLI Enhancements 🔄
-- Query improvements: --recent, --limit, --type filters
-- Status command: verbose logging, full config display
-- Export/Import commands for identity backup
-- MCP proxy improvements
+### Phase 8: Networking Enhancements 🔄
+- QUIC transport for improved latency and NAT traversal
+- NAT traversal: Circuit Relay v2, direct hole punching, TURN fallback
+
+### Phase 9: Skill Loader ✅
+- Conversational skill-trigger system for AI agents
+- `dmgn_load_skill` MCP tool integration
+- Dynamic skill loading at runtime
+
+### Phase 10: Graph Sync ✅
+- Distributed knowledge graph edge propagation
+- Gossip-based edge sync alongside memory sync
+- Delta sync for efficient updates
 
 ## Security
 
