@@ -487,7 +487,8 @@ func (s *MCPServer) handleGetStatus(ctx context.Context, req *mcp.CallToolReques
 type LoadSkillInput struct{}
 
 type LoadSkillOutput struct {
-	Content string `json:"content"`
+	Prompt string `json:"prompt"`
+	Source string `json:"source"`
 }
 
 func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolRequest, input LoadSkillInput) (*mcp.CallToolResult, LoadSkillOutput, error) {
@@ -495,8 +496,19 @@ func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolReques
 	if err != nil {
 		return nil, LoadSkillOutput{}, fmt.Errorf("failed to load skill: %w", err)
 	}
+
+	// Determine source for transparency
+	source := "embedded"
+	for _, p := range skill.SkillSearchPaths {
+		if _, err := os.Stat(p); err == nil {
+			source = p
+			break
+		}
+	}
+
 	return nil, LoadSkillOutput{
-		Content: string(content),
+		Prompt: string(content),
+		Source: source,
 	}, nil
 }
 
