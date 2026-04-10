@@ -13,6 +13,7 @@ import (
 
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/internal/crypto"
+	"github.com/nnlgsakib/dmgn/pkg/graph"
 	"github.com/nnlgsakib/dmgn/pkg/identity"
 	"github.com/nnlgsakib/dmgn/pkg/memory"
 	"github.com/nnlgsakib/dmgn/pkg/query"
@@ -33,6 +34,7 @@ type MCPServer struct {
 	onBroadcast     func(mem *memory.Memory)
 	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
 	kgBroadcaster   func(nodeID, nodeType, label string, meta map[string]string)
+	kgGraph         *graph.Graph
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -44,7 +46,7 @@ func NewMCPServer(
 	id *identity.Identity,
 	cfg *config.Config,
 ) *MCPServer {
-	return &MCPServer{
+	mcpServer := &MCPServer{
 		store:       store,
 		vecIndex:    vecIndex,
 		queryEngine: queryEngine,
@@ -53,6 +55,12 @@ func NewMCPServer(
 		config:      cfg,
 		logger:      slog.New(slog.NewJSONHandler(os.Stderr, nil)),
 	}
+
+	if cfg.EnableKnowledgeGraph && store != nil {
+		mcpServer.kgGraph = graph.NewGraph(store.DB())
+	}
+
+	return mcpServer
 }
 
 // SetLogger overrides the default logger.
@@ -125,6 +133,21 @@ func (s *MCPServer) newServer() *mcp.Server {
 		Name:        "load_skill",
 		Description: "Load DMGN skill content for agent context. Call this when user mentions DMGN or wants to initialize DMGN capabilities.",
 	}, s.handleLoadSkill)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_node",
+		Description: "Add a node to the knowledge graph. Node can be any entity: person, concept, memory, file, function, etc.",
+	}, s.handleAddNode)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "add_edge",
+		Description: "Add an edge between two knowledge graph nodes with typed relationship (CREATES, USES, BUILT_BY, RELATED_TO, etc).",
+	}, s.handleAddEdgeKG)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "query_graph",
+		Description: "Query the knowledge graph for incoming/outgoing edges from a node.",
+	}, s.handleQueryGraph)
 
 	return server
 }
@@ -604,6 +627,56 @@ type LoadSkillOutput struct {
 	Source string `json:"source"`
 }
 
+// --- knowledge graph handlers ---
+
+type AddNodeInput struct {
+	ID    string         `json:"id"`
+	Type  string         `json:"type"`
+	Label string         `json:"label"`
+	Meta  map[string]any `json:"meta,omitempty"`
+}
+
+type AddNodeOutput struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Label   string `json:"label"`
+	Created bool   `json:"created"`
+}
+
+type AddEdgeKGInput struct {
+	From   string  `json:"from"`
+	To     string  `json:"to"`
+	Type   string  `json:"type"`
+	Weight float32 `json:"weight"`
+}
+
+type AddEdgeKGOutput struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Type    string `json:"type"`
+	Created bool   `json:"created"`
+}
+
+type QueryGraphInput struct {
+	NodeID    string `json:"node_id"`
+	Direction string `json:"direction"`
+	EdgeType  string `json:"edge_type"`
+	MaxDepth  int    `json:"max_depth"`
+}
+
+type QueryGraphOutput struct {
+	Node     string     `json:"node"`
+	Incoming []EdgeInfo `json:"incoming"`
+	Outgoing []EdgeInfo `json:"outgoing"`
+}
+
+type EdgeInfo struct {
+	From   string  `json:"from"`
+	To     string  `json:"to"`
+	Type   string  `json:"type"`
+	Weight float32 `json:"weight"`
+}
+
 func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolRequest, input LoadSkillInput) (*mcp.CallToolResult, LoadSkillOutput, error) {
 	content, err := skill.Load()
 	if err != nil {
@@ -622,6 +695,104 @@ func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolReques
 	return nil, LoadSkillOutput{
 		Prompt: string(content),
 		Source: source,
+	}, nil
+}
+
+func (s *MCPServer) handleAddNode(ctx context.Context, req *mcp.CallToolRequest, input AddNodeInput) (*mcp.CallToolResult, AddNodeOutput, error) {
+	if s.kgGraph == nil {
+		return nil, AddNodeOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	metaAny := make(map[string]any)
+	if input.Meta != nil {
+		for k, v := range input.Meta {
+			metaAny[k] = v
+		}
+	}
+
+	node := &graph.Node{
+		ID:    input.ID,
+		Type:  input.Type,
+		Label: input.Label,
+		Meta:  metaAny,
+	}
+
+	if err := s.kgGraph.AddNode(node); err != nil {
+		return nil, AddNodeOutput{}, fmt.Errorf("failed to add node: %w", err)
+	}
+
+	if s.kgBroadcaster != nil {
+		metaStr := make(map[string]string)
+		for k, v := range metaAny {
+			metaStr[k] = fmt.Sprintf("%v", v)
+		}
+		s.kgBroadcaster(node.ID, node.Type, node.Label, metaStr)
+	}
+
+	return nil, AddNodeOutput{
+		ID:      node.ID,
+		Type:    node.Type,
+		Label:   node.Label,
+		Created: true,
+	}, nil
+}
+
+func (s *MCPServer) handleAddEdgeKG(ctx context.Context, req *mcp.CallToolRequest, input AddEdgeKGInput) (*mcp.CallToolResult, AddEdgeKGOutput, error) {
+	if s.kgGraph == nil {
+		return nil, AddEdgeKGOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	if input.Weight == 0 {
+		input.Weight = 1.0
+	}
+
+	edge := &graph.Edge{
+		From:   input.From,
+		To:     input.To,
+		Type:   input.Type,
+		Weight: input.Weight,
+	}
+
+	if err := s.kgGraph.AddEdge(edge); err != nil {
+		return nil, AddEdgeKGOutput{}, fmt.Errorf("failed to add edge: %w", err)
+	}
+
+	return nil, AddEdgeKGOutput{
+		From:    edge.From,
+		To:      edge.To,
+		Type:    edge.Type,
+		Created: true,
+	}, nil
+}
+
+func (s *MCPServer) handleQueryGraph(ctx context.Context, req *mcp.CallToolRequest, input QueryGraphInput) (*mcp.CallToolResult, QueryGraphOutput, error) {
+	if s.kgGraph == nil {
+		return nil, QueryGraphOutput{}, fmt.Errorf("knowledge graph not initialized")
+	}
+
+	var incoming, outgoing []graph.Edge
+
+	if input.Direction == "incoming" || input.Direction == "" {
+		incoming, _ = s.kgGraph.GetIncoming(input.NodeID, input.EdgeType)
+	}
+	if input.Direction == "outgoing" || input.Direction == "" {
+		outgoing, _ = s.kgGraph.GetOutgoing(input.NodeID, input.EdgeType)
+	}
+
+	inInfo := make([]EdgeInfo, len(incoming))
+	for i, e := range incoming {
+		inInfo[i] = EdgeInfo{From: e.From, To: e.To, Type: e.Type, Weight: e.Weight}
+	}
+
+	outInfo := make([]EdgeInfo, len(outgoing))
+	for i, e := range outgoing {
+		outInfo[i] = EdgeInfo{From: e.From, To: e.To, Type: e.Type, Weight: e.Weight}
+	}
+
+	return nil, QueryGraphOutput{
+		Node:     input.NodeID,
+		Incoming: inInfo,
+		Outgoing: outInfo,
 	}, nil
 }
 
