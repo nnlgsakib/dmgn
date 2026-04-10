@@ -458,15 +458,22 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 
 	// Extract bound addresses and update ListenAddrs
 	// so the same ports are reused on next restart.
-	listenAddrs := make([]string, 0, len(addrs))
+	// Deduplicate: multiple reported IPs share the same port.
+	seen := make(map[string]bool)
+	listenAddrs := make([]string, 0, 2)
 	for _, addr := range addrs {
 		parts := strings.Split(addr.String(), "/")
 		for i, p := range parts {
+			var la string
 			if p == "tcp" && i+1 < len(parts) {
-				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1]))
+				la = fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1])
 			}
 			if p == "udp" && i+1 < len(parts) {
-				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", parts[i+1]))
+				la = fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", parts[i+1])
+			}
+			if la != "" && !seen[la] {
+				seen[la] = true
+				listenAddrs = append(listenAddrs, la)
 			}
 		}
 	}
