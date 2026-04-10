@@ -17,6 +17,7 @@ const (
 type Config struct {
 	DataDir           string   `json:"data_dir"`
 	ListenAddr        string   `json:"listen_addr"`
+	ListenAddrs       []string `json:"listen_addrs"`
 	APIPort           int      `json:"api_port"`
 	MaxRecentMemories int      `json:"max_recent_memories"`
 	LogLevel          string   `json:"log_level"`
@@ -35,12 +36,23 @@ type Config struct {
 	GossipTopic       string   `json:"gossip_topic"`
 	OTLPEndpoint      string   `json:"otlp_endpoint"`
 	MCPIPCPort        int      `json:"mcp_ipc_port"`
+
+	EnableHolePunching  bool     `json:"enable_hole_punching"`
+	EnableRelayService  bool     `json:"enable_relay_service"`
+	RelayServers        []string `json:"relay_servers"`
+
+	BlockedPeers          []string `json:"blocked_peers"`
+	AllowedPeers          []string `json:"allowed_peers"`
+	ReputationThreshold   float64  `json:"reputation_threshold"`
+	MaxConnectionsPerPeer int      `json:"max_connections_per_peer"`
+	MaxStreamsPerPeer      int      `json:"max_streams_per_peer"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
 		DataDir:           DefaultDataDir(),
 		ListenAddr:        "/ip4/0.0.0.0/tcp/0",
+		ListenAddrs:       []string{"/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/udp/0/quic-v1"},
 		APIPort:           8080,
 		MaxRecentMemories: 1000,
 		LogLevel:          "info",
@@ -57,6 +69,16 @@ func DefaultConfig() *Config {
 		SyncInterval:      "60s",
 		GossipTopic:       "dmgn/memories/1.0.0",
 		MCPIPCPort:        0,
+
+		EnableHolePunching:  true,
+		EnableRelayService:  false,
+		RelayServers:        []string{},
+
+		BlockedPeers:          []string{},
+		AllowedPeers:          []string{},
+		ReputationThreshold:   0.2,
+		MaxConnectionsPerPeer: 8,
+		MaxStreamsPerPeer:      16,
 	}
 }
 
@@ -162,6 +184,19 @@ func (c *Config) SyncIntervalDuration() time.Duration {
 		return 60 * time.Second
 	}
 	return d
+}
+
+// GetListenAddrs returns the listen addresses to use.
+// Falls back to legacy ListenAddr if ListenAddrs is empty,
+// and returns default TCP+QUIC addresses if both are empty.
+func (c *Config) GetListenAddrs() []string {
+	if len(c.ListenAddrs) > 0 {
+		return c.ListenAddrs
+	}
+	if c.ListenAddr != "" {
+		return []string{c.ListenAddr}
+	}
+	return []string{"/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/udp/0/quic-v1"}
 }
 
 func (c *Config) EnsureDirs() error {

@@ -96,14 +96,26 @@ func (d *Daemon) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to open storage: %w", err)
 	}
 
-	// 3. Create and start libp2p host
+	// 3. Create connection gater
+	gater := network.NewReputationGater(
+		nil,
+		d.cfg.BlockedPeers,
+		d.cfg.AllowedPeers,
+		d.cfg.ReputationThreshold,
+	)
+
+	// 4. Create and start libp2p host
 	hostCfg := network.HostConfig{
-		ListenAddrs:    []string{d.cfg.ListenAddr},
-		BootstrapPeers: d.cfg.BootstrapPeers,
-		MDNSService:    d.cfg.MDNSService,
-		MaxPeersLow:    d.cfg.MaxPeersLow,
-		MaxPeersHigh:   d.cfg.MaxPeersHigh,
-		PrivateKey:     d.keys.LibP2PKey,
+		ListenAddrs:        d.cfg.GetListenAddrs(),
+		BootstrapPeers:     d.cfg.BootstrapPeers,
+		MDNSService:        d.cfg.MDNSService,
+		MaxPeersLow:        d.cfg.MaxPeersLow,
+		MaxPeersHigh:       d.cfg.MaxPeersHigh,
+		PrivateKey:         d.keys.LibP2PKey,
+		EnableHolePunching: d.cfg.EnableHolePunching,
+		EnableRelayService: d.cfg.EnableRelayService,
+		RelayServers:       d.cfg.RelayServers,
+		ConnectionGater:    gater,
 	}
 
 	d.host, err = network.NewHost(hostCfg)
@@ -116,6 +128,11 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.store.Close()
 		return fmt.Errorf("failed to start network host: %w", err)
 	}
+
+	// Wire rate limiters for protocol handlers
+	storeLimiter := network.NewPeerRateLimiter(10, 20)
+	fetchLimiter := network.NewPeerRateLimiter(20, 40)
+	d.host.SetRateLimiters(storeLimiter, fetchLimiter)
 
 	peerID := d.host.ID().String()
 	d.logger.Info("network host started",
@@ -439,8 +456,24 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 		fullAddrs = append(fullAddrs, fmt.Sprintf("%s/p2p/%s", addr.String(), peerID))
 	}
 
-	// Extract the actual TCP port from bound addresses and update ListenAddr
-	// so the same port is reused on next restart.
+	// Extract bound addresses and update ListenAddrs
+	// so the same ports are reused on next restart.
+	listenAddrs := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		parts := strings.Split(addr.String(), "/")
+		for i, p := range parts {
+			if p == "tcp" && i+1 < len(parts) {
+				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1]))
+			}
+			if p == "udp" && i+1 < len(parts) {
+				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", parts[i+1]))
+			}
+		}
+	}
+	if len(listenAddrs) > 0 {
+		d.cfg.ListenAddrs = listenAddrs
+	}
+	// Keep legacy ListenAddr for backward compat
 	for _, addr := range addrs {
 		parts := strings.Split(addr.String(), "/")
 		for i, p := range parts {
@@ -460,7 +493,7 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 	} else {
 		d.logger.Info("node multiaddresses persisted to config",
 			"addrs", fullAddrs,
-			"listen_addr", d.cfg.ListenAddr,
+			"listen_addrs", d.cfg.ListenAddrs,
 		)
 	}
 }

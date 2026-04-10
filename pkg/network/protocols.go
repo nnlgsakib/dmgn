@@ -112,6 +112,12 @@ func readProtoHeaderOnly(r io.Reader, msg proto.Message) error {
 func (h *Host) RegisterStoreHandler(store StorageBackend) {
 	h.host.SetStreamHandler(StoreProtocol, func(s network.Stream) {
 		defer s.Close()
+
+		if h.storeLimiter != nil && !h.storeLimiter.Allow(s.Conn().RemotePeer()) {
+			writeProtoFrame(s, &dmgnpb.StoreResponse{Status: "error", Message: "rate limited"}, nil)
+			return
+		}
+
 		s.SetDeadline(time.Now().Add(storeTimeout))
 
 		// Read request header
@@ -165,6 +171,12 @@ func (h *Host) RegisterStoreHandler(store StorageBackend) {
 func (h *Host) RegisterFetchHandler(store StorageBackend) {
 	h.host.SetStreamHandler(FetchProtocol, func(s network.Stream) {
 		defer s.Close()
+
+		if h.fetchLimiter != nil && !h.fetchLimiter.Allow(s.Conn().RemotePeer()) {
+			writeProtoFrame(s, &dmgnpb.FetchResponse{Status: "error", Message: "rate limited"}, nil)
+			return
+		}
+
 		s.SetDeadline(time.Now().Add(fetchTimeout))
 
 		// Read request

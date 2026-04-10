@@ -2,7 +2,7 @@
 
 **Project:** DMGN  
 **Created:** 2025-04-09  
-**Granularity:** Standard (6 phases)
+**Granularity:** Standard (8 phases)
 
 ## Summary
 
@@ -15,6 +15,7 @@
 | 5 | [Query & Sync](#phase-5-query--sync) | Cross-peer search and consistency | Vector search, gossip sync | 5 |
 | 6 | [MCP & Polish](#phase-6-mcp--polish) | Full MCP support and production readiness | MCP tools, metrics, docs | 5 |
 | 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
+| 8 | [Networking Enhancements](#phase-8-networking-enhancements) | QUIC transport, NAT traversal, networking security | QUIC v1, Relay v2, hole punching, connection gater, resource mgr | 4 |
 
 ---
 
@@ -168,6 +169,36 @@
 
 ---
 
+## Phase 8: Networking Enhancements
+
+**Goal:** Add QUIC transport, NAT traversal, and networking layer security for production-grade P2P connectivity
+
+**Requirements:** NETW-02, NETW-04, NETW-06, NETW-07, NETW-08, NETW-09
+
+**Success Criteria:**
+1. Node listens on both TCP and QUIC v1 transports
+2. QUIC transport functional for peer connections
+3. Circuit Relay v2 enables nodes behind NAT to be reachable
+4. Direct hole punching reduces relay dependency
+5. Configuration supports listen address arrays and NAT options
+6. Connection gater blocks low-reputation and explicitly blocked peers
+7. Resource Manager enforces per-peer connection and stream limits
+8. Protocol handlers rate-limited per peer
+9. Peer blocklist/allowlist configurable via config
+
+**Key Components:**
+- QUIC transport configuration (quic-v1 multiaddr)
+- Circuit Relay v2 service (relay for other peers)
+- Hole punching (direct NAT traversal)
+- TURN fallback configuration
+- Updated config struct (ListenAddrs array, NAT booleans)
+- Connection gater integrated with ReputationManager
+- libp2p Resource Manager (connection/stream limits)
+- Per-peer protocol rate limiter
+- Config-driven peer blocklist/allowlist
+
+---
+
 ## Dependency Graph
 
 ```
@@ -184,6 +215,8 @@ Phase 5: Query & Sync (depends on Phase 2, 4)
 Phase 6: MCP & Polish (depends on all previous)
     ↓
 Phase 7: Daemon Architecture & CLI Restructure (depends on all previous)
+    ↓
+Phase 8: Networking Enhancements (depends on Phase 3, 7)
 ```
 
 ---
@@ -211,6 +244,7 @@ Phase 7: Daemon Architecture & CLI Restructure (depends on all previous)
 | 5 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 6 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 7 | **Planned** | — | — |
+| 8 | **Planned** | — | — |
 
 ---
 
