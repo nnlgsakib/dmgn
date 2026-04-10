@@ -266,18 +266,25 @@ type GetStatusOutput struct {
 func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
 	cfg := s.config
 	if !cfg.EnableAutoLink {
+		s.logger.Debug("auto-linking disabled in config")
 		return
 	}
 	if s.vecIndex == nil || s.store == nil {
+		s.logger.Debug("auto-linking skipped: vecIndex or store nil")
 		return
 	}
 	if len(mem.Embedding) == 0 {
+		s.logger.Debug("auto-linking skipped: no embedding in memory", "memID", mem.ID)
 		return
 	}
 
+	s.logger.Info("auto-linking starting", "memID", mem.ID, "embeddingDim", len(mem.Embedding))
+
 	similarResults := s.vecIndex.Search(mem.Embedding, cfg.MaxAutoLinksPerMemory)
+	s.logger.Info("auto-linking search complete", "results", len(similarResults))
 
 	linked := make(map[string]bool)
+	similarCount := 0
 
 	for _, result := range similarResults {
 		if result.MemoryID == mem.ID {
@@ -295,18 +302,24 @@ func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
 			linked[result.MemoryID] = true
 			graph := s.store.GetGraph()
 			_ = graph.AddEdge(mem.ID, result.MemoryID, weight, "auto")
+			similarCount++
 
 			if s.edgeBroadcaster != nil {
+				s.logger.Info("auto-linking broadcasting edge", "from", mem.ID, "to", result.MemoryID, "weight", weight, "type", "auto")
 				s.edgeBroadcaster(mem.ID, result.MemoryID, weight, "auto")
 			}
+		} else {
+			s.logger.Error("auto-linking failed to add edge", "err", err)
 		}
 	}
 
 	recent, err := s.store.GetRecentMemories(100)
 	if err != nil {
+		s.logger.Error("auto-linking failed to get recent memories", "err", err)
 		return
 	}
 	timeWindowNanos := int64(cfg.AutoLinkTimeWindowMinutes) * 60 * 1e9
+	timeCount := 0
 
 	for _, recentMem := range recent {
 		if recentMem.ID == mem.ID {
@@ -326,13 +339,17 @@ func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
 				linked[recentMem.ID] = true
 				graph := s.store.GetGraph()
 				_ = graph.AddEdge(mem.ID, recentMem.ID, weight, "auto")
+				timeCount++
 
 				if s.edgeBroadcaster != nil {
+					s.logger.Info("auto-linking broadcasting time edge", "from", mem.ID, "to", recentMem.ID, "weight", weight, "type", "auto")
 					s.edgeBroadcaster(mem.ID, recentMem.ID, weight, "auto")
 				}
 			}
 		}
 	}
+
+	s.logger.Info("auto-linking complete", "memID", mem.ID, "similarEdges", similarCount, "timeEdges", timeCount)
 }
 
 func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolRequest, input AddMemoryInput) (*mcp.CallToolResult, AddMemoryOutput, error) {
