@@ -140,10 +140,12 @@ func (d *Daemon) Start(ctx context.Context) error {
 	if d.host.DHT() != nil {
 		router = network.NewShardRouter(d.host.DHT())
 	}
-	_ = sharding.NewDistributor(nil, d.store, router, shardCfg)
+	dist := sharding.NewDistributor(nil, d.store, router, shardCfg)
 
-	auditor := network.NewShardAuditor(nil, 5*time.Minute)
-	auditor.Start(d.ctx)
+	if dist != nil {
+		auditor := network.NewShardAuditor(dist, 5*time.Minute)
+		auditor.Start(d.ctx)
+	}
 
 	d.logger.Info("shard config",
 		"threshold", shardCfg.Threshold,

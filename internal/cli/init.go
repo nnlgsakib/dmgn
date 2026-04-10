@@ -9,21 +9,31 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	
+
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/pkg/identity"
 )
 
 func InitCmd() *cobra.Command {
 	var dataDir string
+	var passFlag string
 
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a new DMGN node",
 		Long:  `Initialize creates a new identity and storage for your DMGN node.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("help") {
+				return nil
+			}
+
 			if dataDir == "" {
 				dataDir = config.DefaultDataDir()
+			}
+
+			cfg, err := config.Load(dataDir)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
 			}
 
 			if identity.Exists(dataDir) {
@@ -33,17 +43,25 @@ func InitCmd() *cobra.Command {
 			fmt.Println("Creating new DMGN identity...")
 			fmt.Println()
 
-			passphrase, err := promptPassphrase()
-			if err != nil {
-				return err
+			var passphrase string
+			if passFlag != "" {
+				if len(passFlag) < 8 {
+					return fmt.Errorf("passphrase must be at least 8 characters")
+				}
+				passphrase = passFlag
+			} else {
+				passphrase, err = promptPassphrase()
+				if err != nil {
+					return err
+				}
 			}
 
-			id, err := identity.Generate(passphrase, dataDir)
+			generatedId, err := identity.Generate(passphrase, dataDir)
 			if err != nil {
 				return fmt.Errorf("failed to create identity: %w", err)
 			}
 
-			cfg := config.DefaultConfig()
+			cfg = config.DefaultConfig()
 			cfg.DataDir = dataDir
 			if err := cfg.Save(); err != nil {
 				return fmt.Errorf("failed to save config: %w", err)
@@ -51,7 +69,7 @@ func InitCmd() *cobra.Command {
 
 			fmt.Println()
 			fmt.Println("✓ Identity created successfully!")
-			fmt.Printf("  ID: %s\n", id.ID)
+			fmt.Printf("  ID: %s\n", generatedId.ID)
 			fmt.Printf("  Data directory: %s\n", dataDir)
 			fmt.Println()
 			fmt.Println("IMPORTANT: Backup your identity with 'dmgn export' and store it safely.")
@@ -62,6 +80,7 @@ func InitCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory (default: platform-specific)")
+	cmd.Flags().StringVar(&passFlag, "pass", "", "Passphrase (skip interactive prompt)")
 
 	return cmd
 }

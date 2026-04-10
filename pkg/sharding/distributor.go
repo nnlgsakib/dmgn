@@ -173,6 +173,10 @@ func (d *Distributor) ReconstructFromPeers(ctx context.Context, memoryID string,
 
 // DrainPending distributes any pending shards to newly available peers.
 func (d *Distributor) DrainPending(ctx context.Context) int {
+	if d.sender == nil {
+		return 0
+	}
+
 	d.mu.Lock()
 	pending := make([]Shard, len(d.pending))
 	copy(pending, d.pending)
