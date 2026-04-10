@@ -32,6 +32,7 @@ User owns their identity and memory data that persists across devices and time, 
 │  Local Storage (BadgerDB) │  libp2p Network                │
 ├───────────────────────────┴──────────────────────────────────┤
 │  Identity (ed25519) │  Sync │  Shard Distribution            │
+│  Protobuf (wire)     │  Protobuf (protocols)               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,6 +61,7 @@ User owns their identity and memory data that persists across devices and time, 
 | 5 | ✅ Complete | Query & Sync — Vector search, gossip sync, delta sync |
 | 6 | ✅ Complete | MCP & Polish — MCP protocol, observability, backup, docs |
 | 7 | ✅ Complete | Daemon Architecture — Background daemon, CLI restructure, MCP IPC |
+| 8 | 🔄 In Progress | CLI Enhancements — Query improvements, status, export/import |
 
 ## Installation
 
@@ -416,6 +418,13 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full setup guide.
 - Node multiaddresses persisted in config for bootnode sharing
 - PID file + port file lifecycle management
 - Derived keys passed securely via environment variable
+- Protobuf v2.0.0 migration for wire protocols
+
+### Phase 8: CLI Enhancements 🔄
+- Query improvements: --recent, --limit, --type filters
+- Status command: verbose logging, full config display
+- Export/Import commands for identity backup
+- MCP proxy improvements
 
 ## Security
 

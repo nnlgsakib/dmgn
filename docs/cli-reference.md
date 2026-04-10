@@ -67,7 +67,15 @@ Show node status and statistics.
 dmgn status [--data-dir <path>]
 ```
 
-Displays: memory count, identity ID, storage path, config summary.
+**Flags:**
+| Flag | Type | Description |
+|------|------|-------------|
+| `--verbose` | bool | Show verbose logging output |
+
+**Example:**
+```bash
+dmgn status --verbose
+```
 
 ### `dmgn start`
 
@@ -82,6 +90,25 @@ dmgn start [flags]
 |------|------|-------------|
 | `--data-dir` | string | Data directory |
 | `--no-api` | bool | Disable REST API server |
+| `--verbose` | bool | Enable verbose logging for debug |
+
+### `dmgn stop`
+
+Gracefully stop the running DMGN daemon.
+
+```bash
+dmgn stop [--data-dir <path>]
+```
+
+### `dmgn mcp`
+
+stdio↔TCP proxy for AI agent MCP integration. Used by Claude Desktop and other AI tools.
+
+```bash
+dmgn mcp [--data-dir <path>]
+```
+
+**Note:** The daemon must be running (`dmgn start`) before using `dmgn mcp`.
 
 ### `dmgn mcp-serve`
 

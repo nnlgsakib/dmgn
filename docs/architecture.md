@@ -93,3 +93,4 @@ CLI entry point. Registers all cobra commands.
 - **Config-driven**: All tunables in `config.Config` with JSON serialization
 - **Content-addressable**: Memory IDs derived from encrypted payload hash
 - **Dual encryption**: Master key wraps per-memory keys, per-memory keys wrap payloads
+- **Protobuf v2.0.0 for wire protocols**: Store/fetch, gossip, delta sync use protobuf; disk uses BadgerDB native; API uses JSON
