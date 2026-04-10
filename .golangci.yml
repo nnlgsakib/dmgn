@@ -2,19 +2,3 @@ version: "2"
 
 linters:
   default: standard
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-
-issues:
-  exclude-generated: true
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-output:
-  formats:
-    - format: colored-line-number
