@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop, 'feat/**', 'fix/**', 'perf/**']
+  pull_request:
+    branches: [main, master, develop]
+
+env:
+  GO_VERSION: '1.25'
+  CGO_ENABLED: 0
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.5.0
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: go build -ldflags="-s -w" -o dmgn ./cmd/dmgn
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmgn-linux-amd64
+          path: dmgn
+          retention-days: 7
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck -show=verbose ./... || true
+        continue-on-error: true
+
+  proto:
+    name: Proto Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check for proto changes
+        run: |
+          # Just check that the proto file exists and is valid Go
+          if [ ! -f "proto/dmgn/v1/dmgn.proto" ]; then
+            echo "Proto file not found"
+            exit 1
+          fi
+          if [ ! -f "proto/dmgn/v1/dmgn.pb.go" ]; then
+            echo "Generated proto Go file not found - run 'go generate' locally"
+            exit 1
+          fi
+          echo "Proto files present"

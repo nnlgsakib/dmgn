@@ -1,0 +1,221 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: false
+      draft:
+        description: 'Create as draft'
+        type: boolean
+        default: false
+
+env:
+  GO_VERSION: '1.25'
+  CGO_ENABLED: 0
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Validate tag format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: Tag must be in format vMAJOR.MINOR.PATCH (e.g., v1.0.0)"
+            exit 1
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: DMGN ${{ steps.version.outputs.version }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          body: |
+            ## What's Changed
+
+            See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.
+
+            ## Installation
+
+            Download the appropriate binary for your platform:
+
+            ### Linux
+            ```bash
+            curl -sL https://github.com/nnlgsakib/dmgn/releases/download/${{ steps.version.outputs.version }}/dmgn-linux-amd64 -o dmgn
+            chmod +x dmgn
+            ```
+
+            ### macOS
+            ```bash
+            curl -sL https://github.com/nnlgsakib/dmgn/releases/download/${{ steps.version.outputs.version }}/dmgn-darwin-amd64 -o dmgn
+            chmod +x dmgn
+            ```
+
+            ### Windows
+            Download `dmgn-windows-amd64.exe` from the assets below.
+
+            ## Docker
+
+            ```bash
+            docker pull ghcr.io/nnlgsakib/dmgn:${{ steps.version.outputs.version }}
+            ```
+          category: released
+
+  build-release:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    needs: [release]
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.version }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          ext=""
+          if [ "$GOOS" = "windows" ]; then
+            ext=".exe"
+          fi
+          FILENAME="dmgn-${GOOS}-${GOARCH}${ext}"
+          
+          GOFLAGS="-ldflags=-s -w" go build -o "$FILENAME" ./cmd/dmgn
+          
+          echo "Built: $FILENAME"
+          ls -la "$FILENAME"
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: dmgn-${{ matrix.goos }}-${{ matrix.goarch }}{{ matrix.goos == 'windows' && '.exe' || '' }}
+          asset_name: dmgn-${{ matrix.goos }}-${{ matrix.goarch }}{{ matrix.goos == 'windows' && '.exe' || '' }}
+          asset_content_type: application/octet-stream
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [release]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/nnlgsakib/dmgn:${{ needs.release.outputs.version }}
+            ghcr.io/nnlgsakib/dmgn:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  checksum:
+    name: Generate Checksums
+    runs-on: ubuntu-latest
+    needs: [release, build-release]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.version }}
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd artifacts
+          find . -type f -exec shasum -a 256 {} \; | tee checksums.txt
+          cat checksums.txt
+
+      - name: Upload Checksums
+        uses: actions/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.upload_url }}
+          asset_path: artifacts/checksums.txt
+          asset_name: checksums.txt
+          asset_content_type: text/plain
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [release, docker, checksum]
+    if: always()
+    steps:
+      - name: Success notification
+        if: needs.release.result == 'success'
+        run: echo "Release ${{ needs.release.outputs.version }} completed successfully!"
+
+      - name: Failure notification
+        if: needs.release.result == 'failure'
+        run: echo "Release failed!"
