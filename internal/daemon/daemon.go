@@ -14,6 +14,9 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	"google.golang.org/protobuf/proto"
 
+	libnet "github.com/libp2p/go-libp2p/core/network"
+	"github.com/multiformats/go-multiaddr"
+
 	"github.com/nnlgsakib/dmgn/internal/api"
 	"github.com/nnlgsakib/dmgn/internal/config"
 	"github.com/nnlgsakib/dmgn/internal/crypto"
@@ -115,6 +118,9 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	// Persist this node's full multiaddresses to config
 	d.persistMultiaddrs(peerID)
+
+	// Register peer connect/disconnect event logger
+	d.host.RegisterConnectionNotifier(&peerEventNotifier{logger: d.logger})
 
 	// 4. Reconstruct identity for subsystems that need it
 	id := d.keys.Identity()
@@ -412,3 +418,26 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 		)
 	}
 }
+
+// peerEventNotifier logs peer connect/disconnect events.
+type peerEventNotifier struct {
+	logger *slog.Logger
+}
+
+func (n *peerEventNotifier) Connected(_ libnet.Network, conn libnet.Conn) {
+	n.logger.Info("peer connected",
+		"peer", conn.RemotePeer().String(),
+		"addr", conn.RemoteMultiaddr().String(),
+	)
+	fmt.Printf("Peer connected: %s (%s)\n", conn.RemotePeer(), conn.RemoteMultiaddr())
+}
+
+func (n *peerEventNotifier) Disconnected(_ libnet.Network, conn libnet.Conn) {
+	n.logger.Info("peer disconnected",
+		"peer", conn.RemotePeer().String(),
+	)
+	fmt.Printf("Peer disconnected: %s\n", conn.RemotePeer())
+}
+
+func (n *peerEventNotifier) Listen(libnet.Network, multiaddr.Multiaddr)      {}
+func (n *peerEventNotifier) ListenClose(libnet.Network, multiaddr.Multiaddr) {}

@@ -10,6 +10,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	libnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -145,6 +146,11 @@ func (h *Host) Addrs() []multiaddr.Multiaddr {
 // LibP2PHost returns the underlying libp2p host for direct access.
 func (h *Host) LibP2PHost() host.Host {
 	return h.host
+}
+
+// RegisterConnectionNotifier registers a network notifiee for peer events.
+func (h *Host) RegisterConnectionNotifier(n libnet.Notifiee) {
+	h.host.Network().Notify(n)
 }
 
 // DHT returns the Kademlia DHT instance for provider operations.

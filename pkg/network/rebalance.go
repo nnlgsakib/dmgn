@@ -85,9 +85,18 @@ func NewShardAuditor(d RebalanceDistributor, interval time.Duration) *ShardAudit
 
 // Start begins periodic shard auditing in a goroutine.
 func (a *ShardAuditor) Start(ctx context.Context) {
+	if a.distributor == nil {
+		close(a.done)
+		return
+	}
 	ctx, a.cancel = context.WithCancel(ctx)
 	go func() {
 		defer close(a.done)
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("ShardAuditor recovered from panic: %v\n", r)
+			}
+		}()
 		ticker := time.NewTicker(a.interval)
 		defer ticker.Stop()
 		for {
