@@ -217,6 +217,11 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.logger.Warn("failed to load version vector", "err", err)
 		vv = pkgsync.NewVersionVector()
 	}
+	edgeVV, err := vvStore.Load("edge:" + d.host.ID().String())
+	if err != nil {
+		d.logger.Warn("failed to load edge version vector", "err", err)
+		edgeVV = pkgsync.NewVersionVector()
+	}
 
 	onMemoryReceived := func(mem *memory.Memory) {
 		if err := d.store.SaveMemory(mem); err != nil {
@@ -232,6 +237,16 @@ func (d *Daemon) Start(ctx context.Context) error {
 	// 10. Start gossip manager
 	d.nodeCtx, d.nodeStop = context.WithCancel(d.ctx)
 
+	onEdgeReceived := func(edge *dmgnpb.Edge) {
+		if err := d.store.SaveEdgeWithMeta(edge); err != nil {
+			d.logger.Error("failed to save received edge", "from", edge.FromId, "to", edge.ToId, "err", err)
+			return
+		}
+		graph := d.store.GetGraph()
+		graph.AddEdge(edge.FromId, edge.ToId, edge.Weight, edge.EdgeType)
+		d.logger.Info("edge received and saved from peer", "from", edge.FromId, "to", edge.ToId, "type", edge.EdgeType)
+	}
+
 	d.gossipMgr, err = pkgsync.NewGossipManager(d.nodeCtx, d.host.LibP2PHost(), d.cfg.GossipTopic,
 		func(msg *dmgnpb.GossipMessage) {
 			pb := &dmgnpb.Memory{}
@@ -245,6 +260,18 @@ func (d *Daemon) Start(ctx context.Context) error {
 				vvStore.SaveSequence(msg.SenderPeerId, msg.Sequence, mem.ID)
 				vvStore.Save(d.host.ID().String(), vv)
 			}
+		},
+		func(msg *dmgnpb.GossipMessage) {
+			pb := &dmgnpb.Edge{}
+			if err := proto.Unmarshal(msg.Edge, pb); err != nil {
+				return
+			}
+			onEdgeReceived(pb)
+			if msg.Sequence > edgeVV.Get(msg.SenderPeerId) {
+				edgeVV.Set(msg.SenderPeerId, msg.Sequence)
+				vvStore.SaveEdgeSequence(msg.SenderPeerId, msg.Sequence, pb.FromId+":"+pb.ToId)
+				vvStore.Save("edge:"+d.host.ID().String(), edgeVV)
+			}
 		})
 	if err != nil {
 		d.logger.Warn("gossip init failed", "err", err)
@@ -255,8 +282,8 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	// 11. Start delta sync manager
 	d.deltaMgr = pkgsync.NewDeltaSyncManager(
-		d.host.LibP2PHost(), vv, vvStore, d.store,
-		d.host.ID().String(), d.cfg.SyncIntervalDuration(), onMemoryReceived,
+		d.host.LibP2PHost(), vv, edgeVV, vvStore, d.store,
+		d.host.ID().String(), d.cfg.SyncIntervalDuration(), onMemoryReceived, onEdgeReceived,
 	)
 	d.deltaMgr.RegisterHandler()
 	d.deltaMgr.Start(d.nodeCtx)
@@ -287,6 +314,34 @@ func (d *Daemon) Start(ctx context.Context) error {
 		}
 	}
 
+	// 12b. Create broadcast function for edge propagation
+	broadcastEdge := func(fromID, toID string, weight float32, edgeType string) {
+		if d.gossipMgr == nil {
+			return
+		}
+		edge := &dmgnpb.Edge{
+			FromId:        fromID,
+			ToId:          toID,
+			Weight:        weight,
+			EdgeType:      edgeType,
+			Timestamp:     time.Now().UnixNano(),
+			CreatorPeerId: localPeerID,
+		}
+		data, err := proto.Marshal(edge)
+		if err != nil {
+			d.logger.Error("failed to marshal edge for gossip", "from", fromID, "to", toID, "err", err)
+			return
+		}
+		edgeSeq := edgeVV.Increment(localPeerID)
+		vvStore.SaveEdgeSequence(localPeerID, edgeSeq, fromID+":"+toID)
+		vvStore.Save("edge:"+localPeerID, edgeVV)
+		if err := d.gossipMgr.PublishEdge(d.nodeCtx, data, edgeSeq); err != nil {
+			d.logger.Error("failed to broadcast edge", "from", fromID, "to", toID, "err", err)
+		} else {
+			d.logger.Info("edge broadcast to network", "from", fromID, "to", toID, "type", edgeType, "seq", edgeSeq)
+		}
+	}
+
 	// 13. Wire query engine and gossip into API server
 	d.apiServer.SetQueryEngine(d.queryEngine, d.remoteOrch)
 	if d.gossipMgr != nil {
@@ -311,6 +366,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.mcpServer = dmgnmcp.NewMCPServer(d.store, d.vecIndex, d.queryEngine, d.cryptoEng, id, d.cfg)
 	d.mcpServer.SetLogger(d.logger)
 	d.mcpServer.SetBroadcaster(broadcastMemory)
+	d.mcpServer.SetEdgeBroadcaster(broadcastEdge)
 
 	// 16. Start MCP IPC listener
 	listenAddr := fmt.Sprintf("127.0.0.1:%d", d.cfg.MCPIPCPort)
@@ -458,15 +514,22 @@ func (d *Daemon) persistMultiaddrs(peerID string) {
 
 	// Extract bound addresses and update ListenAddrs
 	// so the same ports are reused on next restart.
-	listenAddrs := make([]string, 0, len(addrs))
+	// Deduplicate: multiple reported IPs share the same port.
+	seen := make(map[string]bool)
+	listenAddrs := make([]string, 0, 2)
 	for _, addr := range addrs {
 		parts := strings.Split(addr.String(), "/")
 		for i, p := range parts {
+			var la string
 			if p == "tcp" && i+1 < len(parts) {
-				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1]))
+				la = fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", parts[i+1])
 			}
 			if p == "udp" && i+1 < len(parts) {
-				listenAddrs = append(listenAddrs, fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", parts[i+1]))
+				la = fmt.Sprintf("/ip4/0.0.0.0/udp/%s/quic-v1", parts[i+1])
+			}
+			if la != "" && !seen[la] {
+				seen[la] = true
+				listenAddrs = append(listenAddrs, la)
 			}
 		}
 	}

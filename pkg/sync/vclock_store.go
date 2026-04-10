@@ -87,3 +87,38 @@ func (s *VClockStore) GetMemoriesAfter(peerID string, afterSeq uint64) ([]string
 
 	return memoryIDs, err
 }
+
+// SaveEdgeSequence persists an edge's sequence tag.
+// Key format: edgeseq:{peer_id}:{zero-padded seq} -> from_id:to_id
+func (s *VClockStore) SaveEdgeSequence(peerID string, seq uint64, edgeKey string) error {
+	key := []byte(fmt.Sprintf("edgeseq:%s:%020d", peerID, seq))
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, []byte(edgeKey))
+	})
+}
+
+// GetEdgesAfter returns edge keys with sequence > afterSeq for a given peer.
+func (s *VClockStore) GetEdgesAfter(peerID string, afterSeq uint64) ([]string, error) {
+	prefix := []byte(fmt.Sprintf("edgeseq:%s:", peerID))
+	startKey := []byte(fmt.Sprintf("edgeseq:%s:%020d", peerID, afterSeq+1))
+
+	var edgeKeys []string
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Prefix = prefix
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Seek(startKey); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			val, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			edgeKeys = append(edgeKeys, string(val))
+		}
+		return nil
+	})
+
+	return edgeKeys, err
+}

@@ -13,21 +13,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// GossipManager handles pubsub memory propagation.
+// GossipManager handles pubsub memory and edge propagation.
 type GossipManager struct {
-	ps          *pubsub.PubSub
-	topic       *pubsub.Topic
-	sub         *pubsub.Subscription
-	topicName   string
-	localPeerID peer.ID
-	onReceive   func(msg *dmgnpb.GossipMessage)
-	cancel      context.CancelFunc
-	done        chan struct{}
+	ps            *pubsub.PubSub
+	topic         *pubsub.Topic
+	sub           *pubsub.Subscription
+	topicName     string
+	localPeerID   peer.ID
+	onReceive     func(msg *dmgnpb.GossipMessage)
+	onEdgeReceive func(msg *dmgnpb.GossipMessage)
+	cancel        context.CancelFunc
+	done          chan struct{}
 }
 
 // NewGossipManager creates a GossipSub manager for a libp2p host.
 func NewGossipManager(ctx context.Context, host libp2p_host.Host, topicName string,
-	onReceive func(msg *dmgnpb.GossipMessage)) (*GossipManager, error) {
+	onReceive func(msg *dmgnpb.GossipMessage),
+	onEdgeReceive func(msg *dmgnpb.GossipMessage)) (*GossipManager, error) {
 
 	ps, err := pubsub.NewGossipSub(ctx, host)
 	if err != nil {
@@ -46,13 +48,14 @@ func NewGossipManager(ctx context.Context, host libp2p_host.Host, topicName stri
 	}
 
 	return &GossipManager{
-		ps:          ps,
-		topic:       topic,
-		sub:         sub,
-		topicName:   topicName,
-		localPeerID: host.ID(),
-		onReceive:   onReceive,
-		done:        make(chan struct{}),
+		ps:            ps,
+		topic:         topic,
+		sub:           sub,
+		topicName:     topicName,
+		localPeerID:   host.ID(),
+		onReceive:     onReceive,
+		onEdgeReceive: onEdgeReceive,
+		done:          make(chan struct{}),
 	}, nil
 }
 
@@ -69,6 +72,24 @@ func (gm *GossipManager) Publish(ctx context.Context, memoryBytes []byte, seq ui
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal gossip message: %w", err)
+	}
+
+	return gm.topic.Publish(ctx, data)
+}
+
+// PublishEdge broadcasts a new edge to the gossip network.
+func (gm *GossipManager) PublishEdge(ctx context.Context, edgeBytes []byte, seq uint64) error {
+	msg := &dmgnpb.GossipMessage{
+		Type:         "new_edge",
+		Edge:         edgeBytes,
+		SenderPeerId: gm.localPeerID.String(),
+		Timestamp:    time.Now().UnixNano(),
+		Sequence:     seq,
+	}
+
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshal edge gossip message: %w", err)
 	}
 
 	return gm.topic.Publish(ctx, data)
@@ -98,12 +119,15 @@ func (gm *GossipManager) Start(ctx context.Context) {
 				continue // skip malformed messages
 			}
 
-			if gossipMsg.Type != "new_memory" || len(gossipMsg.Memory) == 0 {
-				continue // skip invalid messages
-			}
-
-			if gm.onReceive != nil {
-				gm.onReceive(&gossipMsg)
+			switch gossipMsg.Type {
+			case "new_memory":
+				if len(gossipMsg.Memory) > 0 && gm.onReceive != nil {
+					gm.onReceive(&gossipMsg)
+				}
+			case "new_edge":
+				if len(gossipMsg.Edge) > 0 && gm.onEdgeReceive != nil {
+					gm.onEdgeReceive(&gossipMsg)
+				}
 			}
 		}
 	}()

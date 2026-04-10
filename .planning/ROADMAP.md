@@ -16,6 +16,7 @@
 | 6 | [MCP & Polish](#phase-6-mcp--polish) | Full MCP support and production readiness | MCP tools, metrics, docs | 5 |
 | 7 | [Daemon Architecture](#phase-7-daemon-architecture--cli-restructure) | Persistent background daemon with integrated MCP and auto peer networking | Daemon, MCP auto-serve, stop cmd | 7 |
 | 8 | [Networking Enhancements](#phase-8-networking-enhancements) | QUIC transport, NAT traversal, networking security | QUIC v1, Relay v2, hole punching, connection gater, resource mgr | 4 |
+| 10 | [Graph Sync](#phase-10-distributed-graph-sync) | Distribute knowledge graph edges across all peers | Edge gossip, edge delta sync, edge proto, MCP wiring | 0 |
 
 ---
 
@@ -217,6 +218,8 @@ Phase 6: MCP & Polish (depends on all previous)
 Phase 7: Daemon Architecture & CLI Restructure (depends on all previous)
     ↓
 Phase 8: Networking Enhancements (depends on Phase 3, 7)
+    ↓
+Phase 9: Skill Loader MCP Tool (depends on Phase 6, 7)
 ```
 
 ---
@@ -245,7 +248,64 @@ Phase 8: Networking Enhancements (depends on Phase 3, 7)
 | 6 | **Complete** | 2026-04-09 | 2026-04-09 |
 | 7 | **Planned** | — | — |
 | 8 | **Planned** | — | — |
+| 9 | **Planned** | — | — |
+| 10 | **Complete** | 2026-04-10 | 2026-04-10 |
 
 ---
 
-*Last updated: 2026-04-09 — Phase 7 scope changed to daemon architecture & CLI restructure*
+## Phase 9: Skill Loader MCP Tool
+
+**Goal:** Add conversational skill-trigger system for DMGN — when user mentions "dmgn" in conversation, AI agent triggers skill loading and provides full DMGN tools reference
+
+**Requirements:** None currently defined
+
+**Success Criteria:**
+1. AI agent detects trigger phrases like "init dmgn", "dmgn context", "load dmgn" in conversation
+2. On trigger, skill content loaded from `./skill/SKILL.md` file or embedded fallback
+3. Full skill content (all 7 tools reference, behavioral protocol) injected to agent context
+4. Build-time embedding works via go:embed for offline/disk-less scenarios
+5. Both direct match and fuzzy match trigger modes functional
+
+**Key Components:**
+- Skill loader in MCP server (trigger detection, file loading)
+- Embedded skill fallback (go:embed)
+- Skill content format (tools reference, behavioral protocol)
+- Trigger patterns (direct + fuzzy match)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [x] 09-01-PLAN.md — Skill package + MCP load_skill tool + SKILL.md update
+
+---
+
+## Phase 10: Distributed Graph Sync
+
+**Goal:** Distribute knowledge graph edges (relationships between memories) across all peers — turn DMGN from isolated memory silos into a true distributed knowledge graph
+
+**Requirements:** None currently defined
+
+**Depends on:** Phase 5 (gossip + delta sync foundation)
+
+**Success Criteria:**
+1. Edge created via `link_memories` on peer A appears on peer B within one gossip cycle
+2. Delta sync delivers edges missed during disconnection
+3. Edge persists across daemon restarts on all peers
+4. Proto changes are backward compatible (old peers ignore new fields)
+5. Full test suite passes with zero regressions
+
+**Key Components:**
+- Edge proto message + extended GossipMessage/SyncRequest/SyncResponse
+- Edge gossip broadcast (`type="new_edge"`)
+- Edge delta sync with independent version vector tracking
+- Edge broadcaster wired into MCP `link_memories` handler
+- Orphan edge buffering (edge arrives before referenced memories)
+
+**Plans:** 1 plan
+
+**Plan list:**
+- [x] 10-01-PLAN.md — Distributed edge sync: proto + gossip + delta + MCP wiring
+
+---
+
+*Last updated: 2026-04-10 — Added Phase 10 for distributed graph sync*

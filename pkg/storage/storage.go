@@ -9,6 +9,8 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/nnlgsakib/dmgn/pkg/memory"
+	dmgnpb "github.com/nnlgsakib/dmgn/proto/dmgn/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -243,6 +245,51 @@ func (s *Store) GetEdges(fromID string) ([]string, error) {
 	})
 
 	return edges, err
+}
+
+// SaveEdgeWithMeta stores an edge with full metadata as serialized proto.
+func (s *Store) SaveEdgeWithMeta(edge *dmgnpb.Edge) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		edgeKey := []byte(PrefixEdge + edge.FromId + ":" + edge.ToId)
+		data, err := proto.Marshal(edge)
+		if err != nil {
+			return fmt.Errorf("marshal edge: %w", err)
+		}
+		return txn.Set(edgeKey, data)
+	})
+}
+
+// GetEdgeProto retrieves an edge as serialized proto bytes.
+func (s *Store) GetEdgeProto(fromID, toID string) ([]byte, error) {
+	edgeKey := []byte(PrefixEdge + fromID + ":" + toID)
+	var data []byte
+
+	err := s.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(edgeKey)
+		if err != nil {
+			return err
+		}
+		data, err = item.ValueCopy(nil)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get edge %s:%s: %w", fromID, toID, err)
+	}
+
+	// Verify it's valid proto (not legacy format)
+	edge := &dmgnpb.Edge{}
+	if err := proto.Unmarshal(data, edge); err != nil {
+		// Legacy format — reconstruct
+		edge = &dmgnpb.Edge{
+			FromId:   fromID,
+			ToId:     toID,
+			Weight:   1.0,
+			EdgeType: "related",
+		}
+		data, _ = proto.Marshal(edge)
+	}
+
+	return data, nil
 }
 
 func (s *Store) DeleteMemory(id string) error {

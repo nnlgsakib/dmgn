@@ -422,6 +422,7 @@ type GossipMessage struct {
 	SenderPeerId  string                 `protobuf:"bytes,3,opt,name=sender_peer_id,json=senderPeerId,proto3" json:"sender_peer_id,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Sequence      uint64                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Edge          []byte                 `protobuf:"bytes,6,opt,name=edge,proto3" json:"edge,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -491,13 +492,21 @@ func (x *GossipMessage) GetSequence() uint64 {
 	return 0
 }
 
+func (x *GossipMessage) GetEdge() []byte {
+	if x != nil {
+		return x.Edge
+	}
+	return nil
+}
+
 // SyncRequest is sent by the initiator to begin delta sync.
 type SyncRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SenderPeerId  string                 `protobuf:"bytes,1,opt,name=sender_peer_id,json=senderPeerId,proto3" json:"sender_peer_id,omitempty"`
-	VersionVector map[string]uint64      `protobuf:"bytes,2,rep,name=version_vector,json=versionVector,proto3" json:"version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SenderPeerId      string                 `protobuf:"bytes,1,opt,name=sender_peer_id,json=senderPeerId,proto3" json:"sender_peer_id,omitempty"`
+	VersionVector     map[string]uint64      `protobuf:"bytes,2,rep,name=version_vector,json=versionVector,proto3" json:"version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	EdgeVersionVector map[string]uint64      `protobuf:"bytes,3,rep,name=edge_version_vector,json=edgeVersionVector,proto3" json:"edge_version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *SyncRequest) Reset() {
@@ -544,14 +553,23 @@ func (x *SyncRequest) GetVersionVector() map[string]uint64 {
 	return nil
 }
 
+func (x *SyncRequest) GetEdgeVersionVector() map[string]uint64 {
+	if x != nil {
+		return x.EdgeVersionVector
+	}
+	return nil
+}
+
 // SyncResponse is sent by the responder with missing memories and their version vector.
 type SyncResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SenderPeerId  string                 `protobuf:"bytes,1,opt,name=sender_peer_id,json=senderPeerId,proto3" json:"sender_peer_id,omitempty"`
-	VersionVector map[string]uint64      `protobuf:"bytes,2,rep,name=version_vector,json=versionVector,proto3" json:"version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	Memories      [][]byte               `protobuf:"bytes,3,rep,name=memories,proto3" json:"memories,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SenderPeerId      string                 `protobuf:"bytes,1,opt,name=sender_peer_id,json=senderPeerId,proto3" json:"sender_peer_id,omitempty"`
+	VersionVector     map[string]uint64      `protobuf:"bytes,2,rep,name=version_vector,json=versionVector,proto3" json:"version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Memories          [][]byte               `protobuf:"bytes,3,rep,name=memories,proto3" json:"memories,omitempty"`
+	Edges             [][]byte               `protobuf:"bytes,4,rep,name=edges,proto3" json:"edges,omitempty"`
+	EdgeVersionVector map[string]uint64      `protobuf:"bytes,5,rep,name=edge_version_vector,json=edgeVersionVector,proto3" json:"edge_version_vector,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *SyncResponse) Reset() {
@@ -605,6 +623,105 @@ func (x *SyncResponse) GetMemories() [][]byte {
 	return nil
 }
 
+func (x *SyncResponse) GetEdges() [][]byte {
+	if x != nil {
+		return x.Edges
+	}
+	return nil
+}
+
+func (x *SyncResponse) GetEdgeVersionVector() map[string]uint64 {
+	if x != nil {
+		return x.EdgeVersionVector
+	}
+	return nil
+}
+
+// Edge represents a directed relationship between two memories (wire format).
+type Edge struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FromId        string                 `protobuf:"bytes,1,opt,name=from_id,json=fromId,proto3" json:"from_id,omitempty"`
+	ToId          string                 `protobuf:"bytes,2,opt,name=to_id,json=toId,proto3" json:"to_id,omitempty"`
+	Weight        float32                `protobuf:"fixed32,3,opt,name=weight,proto3" json:"weight,omitempty"`
+	EdgeType      string                 `protobuf:"bytes,4,opt,name=edge_type,json=edgeType,proto3" json:"edge_type,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	CreatorPeerId string                 `protobuf:"bytes,6,opt,name=creator_peer_id,json=creatorPeerId,proto3" json:"creator_peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Edge) Reset() {
+	*x = Edge{}
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Edge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Edge) ProtoMessage() {}
+
+func (x *Edge) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Edge.ProtoReflect.Descriptor instead.
+func (*Edge) Descriptor() ([]byte, []int) {
+	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *Edge) GetFromId() string {
+	if x != nil {
+		return x.FromId
+	}
+	return ""
+}
+
+func (x *Edge) GetToId() string {
+	if x != nil {
+		return x.ToId
+	}
+	return ""
+}
+
+func (x *Edge) GetWeight() float32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *Edge) GetEdgeType() string {
+	if x != nil {
+		return x.EdgeType
+	}
+	return ""
+}
+
+func (x *Edge) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *Edge) GetCreatorPeerId() string {
+	if x != nil {
+		return x.CreatorPeerId
+	}
+	return ""
+}
+
 // QueryFilters holds optional query filters.
 type QueryFilters struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -617,7 +734,7 @@ type QueryFilters struct {
 
 func (x *QueryFilters) Reset() {
 	*x = QueryFilters{}
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[8]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -629,7 +746,7 @@ func (x *QueryFilters) String() string {
 func (*QueryFilters) ProtoMessage() {}
 
 func (x *QueryFilters) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[8]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -642,7 +759,7 @@ func (x *QueryFilters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryFilters.ProtoReflect.Descriptor instead.
 func (*QueryFilters) Descriptor() ([]byte, []int) {
-	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{8}
+	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *QueryFilters) GetType() string {
@@ -680,7 +797,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[9]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -692,7 +809,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[9]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,7 +822,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{9}
+	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *QueryRequest) GetQueryId() string {
@@ -758,7 +875,7 @@ type QueryResult struct {
 
 func (x *QueryResult) Reset() {
 	*x = QueryResult{}
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[10]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -770,7 +887,7 @@ func (x *QueryResult) String() string {
 func (*QueryResult) ProtoMessage() {}
 
 func (x *QueryResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[10]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -783,7 +900,7 @@ func (x *QueryResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResult.ProtoReflect.Descriptor instead.
 func (*QueryResult) Descriptor() ([]byte, []int) {
-	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{10}
+	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *QueryResult) GetMemoryId() string {
@@ -840,7 +957,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[11]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +969,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[11]
+	mi := &file_proto_dmgn_v1_dmgn_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +982,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{11}
+	return file_proto_dmgn_v1_dmgn_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *QueryResponse) GetQueryId() string {
@@ -930,26 +1047,43 @@ const file_proto_dmgn_v1_dmgn_proto_rawDesc = "" +
 	"\tthreshold\x18\x05 \x01(\x05R\tthreshold\x12\x1a\n" +
 	"\bchecksum\x18\x06 \x01(\tR\bchecksum\x12\x19\n" +
 	"\bdata_len\x18\a \x01(\x05R\adataLen\x12\x18\n" +
-	"\amessage\x18\b \x01(\tR\amessage\"\x9b\x01\n" +
+	"\amessage\x18\b \x01(\tR\amessage\"\xaf\x01\n" +
 	"\rGossipMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x16\n" +
 	"\x06memory\x18\x02 \x01(\fR\x06memory\x12$\n" +
 	"\x0esender_peer_id\x18\x03 \x01(\tR\fsenderPeerId\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1a\n" +
-	"\bsequence\x18\x05 \x01(\x04R\bsequence\"\xc5\x01\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12\x12\n" +
+	"\x04edge\x18\x06 \x01(\fR\x04edge\"\xe8\x02\n" +
 	"\vSyncRequest\x12$\n" +
 	"\x0esender_peer_id\x18\x01 \x01(\tR\fsenderPeerId\x12N\n" +
-	"\x0eversion_vector\x18\x02 \x03(\v2'.dmgn.v1.SyncRequest.VersionVectorEntryR\rversionVector\x1a@\n" +
+	"\x0eversion_vector\x18\x02 \x03(\v2'.dmgn.v1.SyncRequest.VersionVectorEntryR\rversionVector\x12[\n" +
+	"\x13edge_version_vector\x18\x03 \x03(\v2+.dmgn.v1.SyncRequest.EdgeVersionVectorEntryR\x11edgeVersionVector\x1a@\n" +
 	"\x12VersionVectorEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\xe3\x01\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1aD\n" +
+	"\x16EdgeVersionVectorEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\x9d\x03\n" +
 	"\fSyncResponse\x12$\n" +
 	"\x0esender_peer_id\x18\x01 \x01(\tR\fsenderPeerId\x12O\n" +
 	"\x0eversion_vector\x18\x02 \x03(\v2(.dmgn.v1.SyncResponse.VersionVectorEntryR\rversionVector\x12\x1a\n" +
-	"\bmemories\x18\x03 \x03(\fR\bmemories\x1a@\n" +
+	"\bmemories\x18\x03 \x03(\fR\bmemories\x12\x14\n" +
+	"\x05edges\x18\x04 \x03(\fR\x05edges\x12\\\n" +
+	"\x13edge_version_vector\x18\x05 \x03(\v2,.dmgn.v1.SyncResponse.EdgeVersionVectorEntryR\x11edgeVersionVector\x1a@\n" +
 	"\x12VersionVectorEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"P\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1aD\n" +
+	"\x16EdgeVersionVectorEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\xaf\x01\n" +
+	"\x04Edge\x12\x17\n" +
+	"\afrom_id\x18\x01 \x01(\tR\x06fromId\x12\x13\n" +
+	"\x05to_id\x18\x02 \x01(\tR\x04toId\x12\x16\n" +
+	"\x06weight\x18\x03 \x01(\x02R\x06weight\x12\x1b\n" +
+	"\tedge_type\x18\x04 \x01(\tR\bedgeType\x12\x1c\n" +
+	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12&\n" +
+	"\x0fcreator_peer_id\x18\x06 \x01(\tR\rcreatorPeerId\"P\n" +
 	"\fQueryFilters\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12\x16\n" +
@@ -986,7 +1120,7 @@ func file_proto_dmgn_v1_dmgn_proto_rawDescGZIP() []byte {
 	return file_proto_dmgn_v1_dmgn_proto_rawDescData
 }
 
-var file_proto_dmgn_v1_dmgn_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_proto_dmgn_v1_dmgn_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_proto_dmgn_v1_dmgn_proto_goTypes = []any{
 	(*Memory)(nil),        // 0: dmgn.v1.Memory
 	(*StoreRequest)(nil),  // 1: dmgn.v1.StoreRequest
@@ -996,25 +1130,30 @@ var file_proto_dmgn_v1_dmgn_proto_goTypes = []any{
 	(*GossipMessage)(nil), // 5: dmgn.v1.GossipMessage
 	(*SyncRequest)(nil),   // 6: dmgn.v1.SyncRequest
 	(*SyncResponse)(nil),  // 7: dmgn.v1.SyncResponse
-	(*QueryFilters)(nil),  // 8: dmgn.v1.QueryFilters
-	(*QueryRequest)(nil),  // 9: dmgn.v1.QueryRequest
-	(*QueryResult)(nil),   // 10: dmgn.v1.QueryResult
-	(*QueryResponse)(nil), // 11: dmgn.v1.QueryResponse
-	nil,                   // 12: dmgn.v1.Memory.MetadataEntry
-	nil,                   // 13: dmgn.v1.SyncRequest.VersionVectorEntry
-	nil,                   // 14: dmgn.v1.SyncResponse.VersionVectorEntry
+	(*Edge)(nil),          // 8: dmgn.v1.Edge
+	(*QueryFilters)(nil),  // 9: dmgn.v1.QueryFilters
+	(*QueryRequest)(nil),  // 10: dmgn.v1.QueryRequest
+	(*QueryResult)(nil),   // 11: dmgn.v1.QueryResult
+	(*QueryResponse)(nil), // 12: dmgn.v1.QueryResponse
+	nil,                   // 13: dmgn.v1.Memory.MetadataEntry
+	nil,                   // 14: dmgn.v1.SyncRequest.VersionVectorEntry
+	nil,                   // 15: dmgn.v1.SyncRequest.EdgeVersionVectorEntry
+	nil,                   // 16: dmgn.v1.SyncResponse.VersionVectorEntry
+	nil,                   // 17: dmgn.v1.SyncResponse.EdgeVersionVectorEntry
 }
 var file_proto_dmgn_v1_dmgn_proto_depIdxs = []int32{
-	12, // 0: dmgn.v1.Memory.metadata:type_name -> dmgn.v1.Memory.MetadataEntry
-	13, // 1: dmgn.v1.SyncRequest.version_vector:type_name -> dmgn.v1.SyncRequest.VersionVectorEntry
-	14, // 2: dmgn.v1.SyncResponse.version_vector:type_name -> dmgn.v1.SyncResponse.VersionVectorEntry
-	8,  // 3: dmgn.v1.QueryRequest.filters:type_name -> dmgn.v1.QueryFilters
-	10, // 4: dmgn.v1.QueryResponse.results:type_name -> dmgn.v1.QueryResult
-	5,  // [5:5] is the sub-list for method output_type
-	5,  // [5:5] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	13, // 0: dmgn.v1.Memory.metadata:type_name -> dmgn.v1.Memory.MetadataEntry
+	14, // 1: dmgn.v1.SyncRequest.version_vector:type_name -> dmgn.v1.SyncRequest.VersionVectorEntry
+	15, // 2: dmgn.v1.SyncRequest.edge_version_vector:type_name -> dmgn.v1.SyncRequest.EdgeVersionVectorEntry
+	16, // 3: dmgn.v1.SyncResponse.version_vector:type_name -> dmgn.v1.SyncResponse.VersionVectorEntry
+	17, // 4: dmgn.v1.SyncResponse.edge_version_vector:type_name -> dmgn.v1.SyncResponse.EdgeVersionVectorEntry
+	9,  // 5: dmgn.v1.QueryRequest.filters:type_name -> dmgn.v1.QueryFilters
+	11, // 6: dmgn.v1.QueryResponse.results:type_name -> dmgn.v1.QueryResult
+	7,  // [7:7] is the sub-list for method output_type
+	7,  // [7:7] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_dmgn_v1_dmgn_proto_init() }
@@ -1028,7 +1167,7 @@ func file_proto_dmgn_v1_dmgn_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_dmgn_v1_dmgn_proto_rawDesc), len(file_proto_dmgn_v1_dmgn_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -55,12 +55,14 @@ message GossipMessage {
   string sender_peer_id = 3;
   int64 timestamp = 4;
   uint64 sequence = 5;
+  bytes edge = 6;
 }
 
 // SyncRequest is sent by the initiator to begin delta sync.
 message SyncRequest {
   string sender_peer_id = 1;
   map<string, uint64> version_vector = 2;
+  map<string, uint64> edge_version_vector = 3;
 }
 
 // SyncResponse is sent by the responder with missing memories and their version vector.
@@ -68,6 +70,18 @@ message SyncResponse {
   string sender_peer_id = 1;
   map<string, uint64> version_vector = 2;
   repeated bytes memories = 3;
+  repeated bytes edges = 4;
+  map<string, uint64> edge_version_vector = 5;
+}
+
+// Edge represents a directed relationship between two memories (wire format).
+message Edge {
+  string from_id = 1;
+  string to_id = 2;
+  float weight = 3;
+  string edge_type = 4;
+  int64 timestamp = 5;
+  string creator_peer_id = 6;
 }
 
 // QueryFilters holds optional query filters.

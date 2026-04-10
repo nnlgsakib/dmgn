@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	libp2p_host "github.com/libp2p/go-libp2p/core/host"
@@ -27,6 +28,7 @@ const maxSyncMsgLen = 16 * 1024 * 1024 // 16 MB
 type DeltaSyncManager struct {
 	host         libp2p_host.Host
 	vv           *VersionVector
+	edgeVV       *VersionVector
 	vvStore      *VClockStore
 	store        *storage.Store
 	localPeerID  string
@@ -34,21 +36,24 @@ type DeltaSyncManager struct {
 	cancel       context.CancelFunc
 	done         chan struct{}
 	onReceive    func(mem *memory.Memory)
+	onEdgeReceive func(edge *dmgnpb.Edge)
 }
 
 // NewDeltaSyncManager creates a new delta sync manager.
-func NewDeltaSyncManager(host libp2p_host.Host, vv *VersionVector, vvStore *VClockStore,
+func NewDeltaSyncManager(host libp2p_host.Host, vv *VersionVector, edgeVV *VersionVector, vvStore *VClockStore,
 	store *storage.Store, localPeerID string, syncInterval time.Duration,
-	onReceive func(mem *memory.Memory)) *DeltaSyncManager {
+	onReceive func(mem *memory.Memory), onEdgeReceive func(edge *dmgnpb.Edge)) *DeltaSyncManager {
 	return &DeltaSyncManager{
-		host:         host,
-		vv:           vv,
-		vvStore:      vvStore,
-		store:        store,
-		localPeerID:  localPeerID,
-		syncInterval: syncInterval,
-		onReceive:    onReceive,
-		done:         make(chan struct{}),
+		host:          host,
+		vv:            vv,
+		edgeVV:        edgeVV,
+		vvStore:       vvStore,
+		store:         store,
+		localPeerID:   localPeerID,
+		syncInterval:  syncInterval,
+		onReceive:     onReceive,
+		onEdgeReceive: onEdgeReceive,
+		done:          make(chan struct{}),
 	}
 }
 
@@ -67,32 +72,41 @@ func (dm *DeltaSyncManager) handleStream(s network.Stream) {
 		return
 	}
 
-	// Build the remote's version vector
+	// Build the remote's version vectors
 	remoteVV := NewVersionVector()
 	for k, v := range req.VersionVector {
 		remoteVV.Set(k, v)
+	}
+	remoteEdgeVV := NewVersionVector()
+	for k, v := range req.EdgeVersionVector {
+		remoteEdgeVV.Set(k, v)
 	}
 
 	// Find what we have that they're missing
 	theirMissing := remoteVV.MissingFrom(dm.vv)
 	memories := dm.collectMissingMemories(theirMissing)
+	theirEdgeMissing := remoteEdgeVV.MissingFrom(dm.edgeVV)
+	edges := dm.collectMissingEdges(theirEdgeMissing)
 
-	// Send response with our version vector + missing memories
+	// Send response with our version vectors + missing data
 	resp := &dmgnpb.SyncResponse{
-		SenderPeerId:  dm.localPeerID,
-		VersionVector: dm.vv.Entries(),
-		Memories:      memories,
+		SenderPeerId:      dm.localPeerID,
+		VersionVector:     dm.vv.Entries(),
+		Memories:          memories,
+		Edges:             edges,
+		EdgeVersionVector: dm.edgeVV.Entries(),
 	}
 
 	writeSyncMsg(s, resp)
 
-	// Read their follow-up (memories they have that we're missing)
+	// Read their follow-up (data they have that we're missing)
 	followUp := &dmgnpb.SyncResponse{}
 	if err := readSyncMsg(s, followUp); err != nil {
 		return
 	}
 
 	dm.processReceivedMemories(followUp.Memories)
+	dm.processReceivedEdges(followUp.Edges)
 }
 
 // SyncWithPeer initiates delta sync with a specific peer.
@@ -103,10 +117,11 @@ func (dm *DeltaSyncManager) SyncWithPeer(ctx context.Context, peerID peer.ID) er
 	}
 	defer s.Close()
 
-	// Send our version vector
+	// Send our version vectors
 	req := &dmgnpb.SyncRequest{
-		SenderPeerId:  dm.localPeerID,
-		VersionVector: dm.vv.Entries(),
+		SenderPeerId:      dm.localPeerID,
+		VersionVector:     dm.vv.Entries(),
+		EdgeVersionVector: dm.edgeVV.Entries(),
 	}
 
 	if err := writeSyncMsg(s, req); err != nil {
@@ -119,22 +134,31 @@ func (dm *DeltaSyncManager) SyncWithPeer(ctx context.Context, peerID peer.ID) er
 		return fmt.Errorf("read sync response: %w", err)
 	}
 
-	// Process received memories
+	// Process received data
 	dm.processReceivedMemories(resp.Memories)
+	dm.processReceivedEdges(resp.Edges)
 
-	// Build their version vector and find what they need from us
+	// Build their version vectors and find what they need from us
 	remoteVV := NewVersionVector()
 	for k, v := range resp.VersionVector {
 		remoteVV.Set(k, v)
 	}
+	remoteEdgeVV := NewVersionVector()
+	for k, v := range resp.EdgeVersionVector {
+		remoteEdgeVV.Set(k, v)
+	}
 	theirMissing := remoteVV.MissingFrom(dm.vv)
 	memories := dm.collectMissingMemories(theirMissing)
+	theirEdgeMissing := remoteEdgeVV.MissingFrom(dm.edgeVV)
+	edges := dm.collectMissingEdges(theirEdgeMissing)
 
 	// Send follow-up with what they're missing
 	followUp := &dmgnpb.SyncResponse{
-		SenderPeerId:  dm.localPeerID,
-		VersionVector: dm.vv.Entries(),
-		Memories:      memories,
+		SenderPeerId:      dm.localPeerID,
+		VersionVector:     dm.vv.Entries(),
+		Memories:          memories,
+		Edges:             edges,
+		EdgeVersionVector: dm.edgeVV.Entries(),
 	}
 	if err := writeSyncMsg(s, followUp); err != nil {
 		return fmt.Errorf("send follow-up: %w", err)
@@ -142,7 +166,9 @@ func (dm *DeltaSyncManager) SyncWithPeer(ctx context.Context, peerID peer.ID) er
 
 	// Merge version vectors
 	dm.vv.Merge(remoteVV)
+	dm.edgeVV.Merge(remoteEdgeVV)
 	dm.vvStore.Save(dm.localPeerID, dm.vv)
+	dm.vvStore.Save("edge:"+dm.localPeerID, dm.edgeVV)
 
 	return nil
 }
@@ -221,6 +247,44 @@ func (dm *DeltaSyncManager) processReceivedMemories(memories [][]byte) {
 		mem := memory.MemoryFromProto(pb)
 		if dm.onReceive != nil {
 			dm.onReceive(mem)
+		}
+	}
+}
+
+// collectMissingEdges gathers edges the remote peer is missing.
+func (dm *DeltaSyncManager) collectMissingEdges(missing map[string]uint64) [][]byte {
+	var edges [][]byte
+
+	for peerID, afterSeq := range missing {
+		edgeKeys, err := dm.vvStore.GetEdgesAfter(peerID, afterSeq)
+		if err != nil {
+			continue
+		}
+		for _, edgeKey := range edgeKeys {
+			parts := strings.SplitN(edgeKey, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			edgeData, err := dm.store.GetEdgeProto(parts[0], parts[1])
+			if err != nil {
+				continue
+			}
+			edges = append(edges, edgeData)
+		}
+	}
+
+	return edges
+}
+
+// processReceivedEdges deserializes and applies received edges.
+func (dm *DeltaSyncManager) processReceivedEdges(edges [][]byte) {
+	for _, raw := range edges {
+		pb := &dmgnpb.Edge{}
+		if err := proto.Unmarshal(raw, pb); err != nil {
+			continue
+		}
+		if dm.onEdgeReceive != nil {
+			dm.onEdgeReceive(pb)
 		}
 	}
 }

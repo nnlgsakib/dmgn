@@ -16,6 +16,7 @@ import (
 	"github.com/nnlgsakib/dmgn/pkg/identity"
 	"github.com/nnlgsakib/dmgn/pkg/memory"
 	"github.com/nnlgsakib/dmgn/pkg/query"
+	"github.com/nnlgsakib/dmgn/pkg/skill"
 	"github.com/nnlgsakib/dmgn/pkg/storage"
 	"github.com/nnlgsakib/dmgn/pkg/vectorindex"
 )
@@ -28,8 +29,9 @@ type MCPServer struct {
 	cryptoEng   *crypto.Engine
 	identity    *identity.Identity
 	config      *config.Config
-	logger      *slog.Logger
-	onBroadcast func(mem *memory.Memory)
+	logger          *slog.Logger
+	onBroadcast     func(mem *memory.Memory)
+	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
 }
 
 // NewMCPServer creates a new MCP server with all required dependencies.
@@ -61,6 +63,12 @@ func (s *MCPServer) SetLogger(l *slog.Logger) {
 // to broadcast it to the gossip network and track its sequence.
 func (s *MCPServer) SetBroadcaster(fn func(mem *memory.Memory)) {
 	s.onBroadcast = fn
+}
+
+// SetEdgeBroadcaster sets the callback invoked after an edge is created,
+// to broadcast it to the gossip network for distributed graph sync.
+func (s *MCPServer) SetEdgeBroadcaster(fn func(fromID, toID string, weight float32, edgeType string)) {
+	s.edgeBroadcaster = fn
 }
 
 // newServer creates a configured MCP server instance with all tools registered.
@@ -106,13 +114,18 @@ func (s *MCPServer) newServer() *mcp.Server {
 		Description: "Get node status including memory count, vector index size, and config summary",
 	}, s.handleGetStatus)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "load_skill",
+		Description: "Load DMGN skill content for agent context. Call this when user mentions DMGN or wants to initialize DMGN capabilities.",
+	}, s.handleLoadSkill)
+
 	return server
 }
 
 // Run starts the MCP server on stdio and blocks until the context is canceled.
 func (s *MCPServer) Run(ctx context.Context) error {
 	server := s.newServer()
-	s.logger.Info("starting MCP server on stdio", "tools", 7)
+	s.logger.Info("starting MCP server on stdio", "tools", 8)
 	return server.Run(ctx, &mcp.StdioTransport{})
 }
 
@@ -389,6 +402,11 @@ func (s *MCPServer) handleLinkMemories(ctx context.Context, req *mcp.CallToolReq
 	graph := s.store.GetGraph()
 	_ = graph.AddEdge(input.FromID, input.ToID, input.Weight, input.EdgeType)
 
+	// Broadcast edge to network
+	if s.edgeBroadcaster != nil {
+		s.edgeBroadcaster(input.FromID, input.ToID, input.Weight, input.EdgeType)
+	}
+
 	return nil, LinkMemoriesOutput{
 		FromID:   input.FromID,
 		ToID:     input.ToID,
@@ -473,6 +491,36 @@ func (s *MCPServer) handleGetStatus(ctx context.Context, req *mcp.CallToolReques
 		EdgeCount:       stats["edge_count"],
 		VectorIndexSize: vecSize,
 		StoragePath:     s.store.DataDir(),
+	}, nil
+}
+
+// --- load_skill handler ---
+
+type LoadSkillInput struct{}
+
+type LoadSkillOutput struct {
+	Prompt string `json:"prompt"`
+	Source string `json:"source"`
+}
+
+func (s *MCPServer) handleLoadSkill(ctx context.Context, req *mcp.CallToolRequest, input LoadSkillInput) (*mcp.CallToolResult, LoadSkillOutput, error) {
+	content, err := skill.Load()
+	if err != nil {
+		return nil, LoadSkillOutput{}, fmt.Errorf("failed to load skill: %w", err)
+	}
+
+	// Determine source for transparency
+	source := "embedded"
+	for _, p := range skill.SkillSearchPaths {
+		if _, err := os.Stat(p); err == nil {
+			source = p
+			break
+		}
+	}
+
+	return nil, LoadSkillOutput{
+		Prompt: string(content),
+		Source: source,
 	}, nil
 }
 
