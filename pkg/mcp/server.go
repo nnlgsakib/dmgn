@@ -23,12 +23,12 @@ import (
 
 // MCPServer wraps a Model Context Protocol server for AI agent integration.
 type MCPServer struct {
-	store       *storage.Store
-	vecIndex    *vectorindex.VectorIndex
-	queryEngine *query.QueryEngine
-	cryptoEng   *crypto.Engine
-	identity    *identity.Identity
-	config      *config.Config
+	store           *storage.Store
+	vecIndex        *vectorindex.VectorIndex
+	queryEngine     *query.QueryEngine
+	cryptoEng       *crypto.Engine
+	identity        *identity.Identity
+	config          *config.Config
 	logger          *slog.Logger
 	onBroadcast     func(mem *memory.Memory)
 	edgeBroadcaster func(fromID, toID string, weight float32, edgeType string)
@@ -261,6 +261,80 @@ type GetStatusOutput struct {
 
 // --- Tool Handlers ---
 
+// autoLinkNewMemory automatically creates edges from a new memory to similar
+// and time-proximate memories based on config thresholds.
+func (s *MCPServer) autoLinkNewMemory(ctx context.Context, mem *memory.Memory) {
+	cfg := s.config
+	if !cfg.EnableAutoLink {
+		return
+	}
+	if s.vecIndex == nil || s.store == nil {
+		return
+	}
+	if len(mem.Embedding) == 0 {
+		return
+	}
+
+	similarResults := s.vecIndex.Search(mem.Embedding, cfg.MaxAutoLinksPerMemory)
+
+	linked := make(map[string]bool)
+
+	for _, result := range similarResults {
+		if result.MemoryID == mem.ID {
+			continue
+		}
+		if result.Score < cfg.AutoLinkSimilarityThreshold {
+			continue
+		}
+		if linked[result.MemoryID] {
+			continue
+		}
+
+		weight := float32(result.Score)
+		if err := s.store.AddEdge(mem.ID, result.MemoryID, weight, "auto"); err == nil {
+			linked[result.MemoryID] = true
+			graph := s.store.GetGraph()
+			_ = graph.AddEdge(mem.ID, result.MemoryID, weight, "auto")
+
+			if s.edgeBroadcaster != nil {
+				s.edgeBroadcaster(mem.ID, result.MemoryID, weight, "auto")
+			}
+		}
+	}
+
+	recent, err := s.store.GetRecentMemories(100)
+	if err != nil {
+		return
+	}
+	timeWindowNanos := int64(cfg.AutoLinkTimeWindowMinutes) * 60 * 1e9
+
+	for _, recentMem := range recent {
+		if recentMem.ID == mem.ID {
+			continue
+		}
+		if linked[recentMem.ID] {
+			continue
+		}
+
+		timeDiff := mem.Timestamp - recentMem.Timestamp
+		if timeDiff < 0 {
+			timeDiff = -timeDiff
+		}
+		if timeDiff <= timeWindowNanos {
+			weight := float32(0.5)
+			if err := s.store.AddEdge(mem.ID, recentMem.ID, weight, "auto"); err == nil {
+				linked[recentMem.ID] = true
+				graph := s.store.GetGraph()
+				_ = graph.AddEdge(mem.ID, recentMem.ID, weight, "auto")
+
+				if s.edgeBroadcaster != nil {
+					s.edgeBroadcaster(mem.ID, recentMem.ID, weight, "auto")
+				}
+			}
+		}
+	}
+}
+
 func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolRequest, input AddMemoryInput) (*mcp.CallToolResult, AddMemoryOutput, error) {
 	memType := memory.TypeText
 	if input.Type != "" {
@@ -289,6 +363,9 @@ func (s *MCPServer) handleAddMemory(ctx context.Context, req *mcp.CallToolReques
 	if len(mem.Embedding) > 0 && s.vecIndex != nil {
 		s.vecIndex.Add(mem.ID, mem.Embedding)
 	}
+
+	// Auto-link to similar/time-proximate memories
+	s.autoLinkNewMemory(ctx, mem)
 
 	// Broadcast to gossip network
 	if s.onBroadcast != nil {
