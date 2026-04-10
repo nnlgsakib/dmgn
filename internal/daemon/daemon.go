@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -55,6 +56,7 @@ type Daemon struct {
 	cancel    context.CancelFunc
 	nodeCtx   context.Context
 	nodeStop  context.CancelFunc
+	verbose   bool
 }
 
 // New creates a new Daemon instance.
@@ -63,6 +65,11 @@ func New(cfg *config.Config, keys *DerivedKeys) *Daemon {
 		cfg:  cfg,
 		keys: keys,
 	}
+}
+
+// SetVerbose enables verbose logging to stderr in addition to the log file.
+func (d *Daemon) SetVerbose(v bool) {
+	d.verbose = v
 }
 
 // Start initializes and starts all daemon subsystems.
@@ -373,9 +380,17 @@ func (d *Daemon) setupLogger() {
 		Compress:   true,
 	}
 
-	d.logger = slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	if d.verbose {
+		// Tee logs to both file and stderr
+		multiWriter := io.MultiWriter(writer, os.Stderr)
+		d.logger = slog.New(slog.NewTextHandler(multiWriter, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))
+	} else {
+		d.logger = slog.New(slog.NewJSONHandler(writer, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}))
+	}
 }
 
 func (d *Daemon) writePortFile(port int) error {

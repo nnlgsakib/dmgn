@@ -24,6 +24,7 @@ func StartCmd() *cobra.Command {
 	var daemonMode bool
 	var passFlag string
 	var mcpPort int
+	var verbose bool
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -51,13 +52,14 @@ Use --foreground to run in the current terminal (useful for debugging).`,
 			}
 
 			// Path B: Normal start (parent launcher)
-			return runLauncher(cfg, foreground, passFlag)
+			return runLauncher(cfg, foreground, passFlag, verbose)
 		},
 	}
 
 	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory")
 	cmd.Flags().StringVar(&passFlag, "pass", "", "Passphrase (skip interactive prompt)")
 	cmd.Flags().IntVar(&mcpPort, "port", 0, "Fixed MCP IPC port (0 = auto-assign)")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "Show all internal logs in terminal")
 	cmd.Flags().BoolVar(&foreground, "foreground", false, "Run daemon in foreground (debug mode)")
 	cmd.Flags().BoolVar(&daemonMode, "daemon-mode", false, "Internal: run as daemon child process")
 	cmd.Flags().MarkHidden("daemon-mode")
@@ -105,7 +107,7 @@ func runDaemonMode(cfg *config.Config) error {
 
 // runLauncher is the foreground parent process that prompts for passphrase,
 // derives keys, and either runs the daemon directly or spawns a background child.
-func runLauncher(cfg *config.Config, foreground bool, passFlag string) error {
+func runLauncher(cfg *config.Config, foreground bool, passFlag string, verbose bool) error {
 	// Check if daemon already running
 	if pid, running := daemon.CheckDaemonRunning(cfg.PIDFile()); running {
 		return fmt.Errorf("DMGN daemon already running (PID: %d)", pid)
@@ -141,15 +143,16 @@ func runLauncher(cfg *config.Config, foreground bool, passFlag string) error {
 	}
 
 	if foreground {
-		return runForeground(cfg, keys)
+		return runForeground(cfg, keys, verbose)
 	}
 
 	return spawnBackground(cfg, keys)
 }
 
 // runForeground runs the daemon in the current terminal (debug mode).
-func runForeground(cfg *config.Config, keys *daemon.DerivedKeys) error {
+func runForeground(cfg *config.Config, keys *daemon.DerivedKeys, verbose bool) error {
 	d := daemon.New(cfg, keys)
+	d.SetVerbose(verbose)
 
 	if err := daemon.WritePID(cfg.PIDFile()); err != nil {
 		return fmt.Errorf("failed to write PID file: %w", err)
