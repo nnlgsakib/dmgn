@@ -32,20 +32,25 @@ type Config struct {
 	EmbeddingDim      int      `json:"embedding_dim"`
 	HybridScoreAlpha  float64  `json:"hybrid_score_alpha"`
 	QueryTimeout      string   `json:"query_timeout"`
-	SyncInterval      string   `json:"sync_interval"`
-	GossipTopic       string   `json:"gossip_topic"`
-	OTLPEndpoint      string   `json:"otlp_endpoint"`
-	MCPIPCPort        int      `json:"mcp_ipc_port"`
 
-	EnableHolePunching  bool     `json:"enable_hole_punching"`
-	EnableRelayService  bool     `json:"enable_relay_service"`
-	RelayServers        []string `json:"relay_servers"`
+	EnableAutoLink              bool    `json:"enable_auto_link"`
+	AutoLinkSimilarityThreshold float64 `json:"auto_link_similarity_threshold"`
+	AutoLinkTimeWindowMinutes   int     `json:"auto_link_time_window_minutes"`
+	MaxAutoLinksPerMemory       int     `json:"max_auto_links_per_memory"`
+	SyncInterval                string  `json:"sync_interval"`
+	GossipTopic                 string  `json:"gossip_topic"`
+	OTLPEndpoint                string  `json:"otlp_endpoint"`
+	MCPIPCPort                  int     `json:"mcp_ipc_port"`
+
+	EnableHolePunching bool     `json:"enable_hole_punching"`
+	EnableRelayService bool     `json:"enable_relay_service"`
+	RelayServers       []string `json:"relay_servers"`
 
 	BlockedPeers          []string `json:"blocked_peers"`
 	AllowedPeers          []string `json:"allowed_peers"`
 	ReputationThreshold   float64  `json:"reputation_threshold"`
 	MaxConnectionsPerPeer int      `json:"max_connections_per_peer"`
-	MaxStreamsPerPeer      int      `json:"max_streams_per_peer"`
+	MaxStreamsPerPeer     int      `json:"max_streams_per_peer"`
 }
 
 func DefaultConfig() *Config {
@@ -66,19 +71,24 @@ func DefaultConfig() *Config {
 		EmbeddingDim:      0,
 		HybridScoreAlpha:  0.7,
 		QueryTimeout:      "2s",
-		SyncInterval:      "60s",
-		GossipTopic:       "dmgn/memories/1.0.0",
-		MCPIPCPort:        0,
 
-		EnableHolePunching:  true,
-		EnableRelayService:  false,
-		RelayServers:        []string{},
+		EnableAutoLink:              true,
+		AutoLinkSimilarityThreshold: 0.7,
+		AutoLinkTimeWindowMinutes:   60,
+		MaxAutoLinksPerMemory:       10,
+		SyncInterval:                "60s",
+		GossipTopic:                 "dmgn/memories/1.0.0",
+		MCPIPCPort:                  0,
+
+		EnableHolePunching: true,
+		EnableRelayService: false,
+		RelayServers:       []string{},
 
 		BlockedPeers:          []string{},
 		AllowedPeers:          []string{},
 		ReputationThreshold:   0.2,
 		MaxConnectionsPerPeer: 8,
-		MaxStreamsPerPeer:      16,
+		MaxStreamsPerPeer:     16,
 	}
 }
 
@@ -104,7 +114,7 @@ func Load(dataDir string) (*Config, error) {
 	}
 
 	configPath := filepath.Join(dataDir, ConfigFile)
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -133,7 +143,7 @@ func (c *Config) Save() error {
 	}
 
 	configPath := filepath.Join(c.DataDir, ConfigFile)
-	
+
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
