@@ -125,8 +125,11 @@ func Load(dataDir string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	// Start with defaults to ensure new fields are populated
+	cfg := DefaultConfig()
+	cfg.DataDir = dataDir
+
+	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
@@ -134,7 +137,7 @@ func Load(dataDir string) (*Config, error) {
 		cfg.DataDir = dataDir
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 func (c *Config) Save() error {
