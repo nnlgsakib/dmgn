@@ -74,6 +74,61 @@ func TestSaveSequence(t *testing.T) {
 	}
 }
 
+func TestSaveEdgeSequence(t *testing.T) {
+	db := openTestDB(t)
+	store := NewVClockStore(db)
+
+	if err := store.SaveEdgeSequence("peer-A", 1, "mem-001:mem-002"); err != nil {
+		t.Fatalf("SaveEdgeSequence 1: %v", err)
+	}
+	if err := store.SaveEdgeSequence("peer-A", 2, "mem-003:mem-004"); err != nil {
+		t.Fatalf("SaveEdgeSequence 2: %v", err)
+	}
+	if err := store.SaveEdgeSequence("peer-A", 3, "mem-005:mem-006"); err != nil {
+		t.Fatalf("SaveEdgeSequence 3: %v", err)
+	}
+}
+
+func TestGetEdgesAfter(t *testing.T) {
+	db := openTestDB(t)
+	store := NewVClockStore(db)
+
+	store.SaveEdgeSequence("peer-A", 1, "m1:m2")
+	store.SaveEdgeSequence("peer-A", 2, "m3:m4")
+	store.SaveEdgeSequence("peer-A", 3, "m5:m6")
+	store.SaveEdgeSequence("peer-A", 4, "m7:m8")
+
+	// Get edges after seq 2 (should return m5:m6, m7:m8)
+	edges, err := store.GetEdgesAfter("peer-A", 2)
+	if err != nil {
+		t.Fatalf("GetEdgesAfter: %v", err)
+	}
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 edges, got %d", len(edges))
+	}
+	if edges[0] != "m5:m6" || edges[1] != "m7:m8" {
+		t.Errorf("expected [m5:m6, m7:m8], got %v", edges)
+	}
+
+	// Get all (after 0)
+	all, err := store.GetEdgesAfter("peer-A", 0)
+	if err != nil {
+		t.Fatalf("GetEdgesAfter 0: %v", err)
+	}
+	if len(all) != 4 {
+		t.Errorf("expected 4 edges, got %d", len(all))
+	}
+
+	// Get none (after latest)
+	none, err := store.GetEdgesAfter("peer-A", 4)
+	if err != nil {
+		t.Fatalf("GetEdgesAfter 4: %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("expected 0 edges, got %d", len(none))
+	}
+}
+
 func TestGetMemoriesAfter(t *testing.T) {
 	db := openTestDB(t)
 	store := NewVClockStore(db)
